@@ -13,7 +13,7 @@ results/<model_name>/<dataset_name>.csv
 
 | column       | type          | description                              |
 |--------------|---------------|-------------------------------------------|
-| `image_path` | string        | full path to the evaluated image          |
+| `filepath` | string        | full path to the evaluated image          |
 | `score`      | float [0, 1]  | model's predicted fake-probability score  |
 | `label`      | int (0 or 1)  | ground-truth label (0 = real, 1 = fake)   |
 

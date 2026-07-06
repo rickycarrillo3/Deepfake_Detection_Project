@@ -1,0 +1,53 @@
+# models/co-spy/
+
+Wrapper around [Megum1/CO-SPY](https://github.com/Megum1/CO-SPY), a semantic+artifact+fusion
+deepfake detector. Ported from the `Co-Spy_Setup.ipynb` Colab exploration.
+
+## Setup
+
+```
+git clone https://github.com/Megum1/CO-SPY.git models/co-spy/CO-SPY
+python -m venv models/co-spy/venv
+source models/co-spy/venv/bin/activate
+pip install -r models/co-spy/requirements.txt
+```
+
+Then download pretrained checkpoints (see CO-SPY's own `pretrained/download.sh`, or the
+HuggingFace repo `ruojiruoli/Co-Spy-Pretrained-*`) so that each `<train_dataset>` name has:
+
+```
+models/co-spy/CO-SPY/pretrained/<train_dataset>/semantic_weights.pth
+models/co-spy/CO-SPY/pretrained/<train_dataset>/artifact_weights.pth
+models/co-spy/CO-SPY/pretrained/<train_dataset>/fusion_weights.pth
+```
+
+`<train_dataset>` selects which fusion checkpoint set to load (e.g. `progan`, `sd-v1_4`) — it is
+not the same as the `<dataset_name>` being evaluated from `data/`.
+
+## Known quirks (carried over from the notebook)
+
+- CO-SPY was built against older `transformers`; newer versions return a model output object from
+  CLIP instead of a raw tensor, and the `progan` checkpoint's CLIP variant expects multimodal
+  `pixel_values`/`input_ids` args instead of a single positional tensor. `model.py` monkey-patches
+  `detector.model.sem.forward` at load time to paper over both cases — see `_patch_sem_forward`.
+- Do not pin `numpy<2` or `scikit-learn==1.3.2` (CO-SPY's own `environment.yml` default) — modern
+  `torch`/`opencv` wheels expect `numpy>=2`, and `scikit-learn>=1.5` is required to support it.
+- Install `torch`/`torchvision` separately, matched to your local CUDA version — they're
+  intentionally left out of `requirements.txt`.
+
+## Usage
+
+```python
+from model import CoSpyModel
+
+model = CoSpyModel(train_dataset="sd-v1_4")
+model.load()
+score = model.predict("/path/to/image.png")  # float in [0, 1]
+```
+
+Or run a full shard-based evaluation against `data/<dataset_name>/`, writing to
+`results/co-spy/<dataset_name>.csv`:
+
+```
+python models/co-spy/run.py --dataset flux_faces --train-dataset sd-v1_4
+```
