@@ -6,18 +6,13 @@ a frequency-domain CNN deepfake detector. Ported from the `FreqNet_setup.ipynb` 
 ## Setup
 
 ```
-git clone https://github.com/chuangchuangtan/FreqNet-DeepfakeDetection.git models/freqnet/FreqNet-DeepfakeDetection
-python -m venv models/freqnet/venv
-source models/freqnet/venv/bin/activate
-pip install -r models/freqnet/FreqNet-DeepfakeDetection/requirements.txt
-pip install -r models/freqnet/requirements.txt
+./models/freqnet/setup.sh
 ```
 
-Place the pretrained checkpoint at the root of the vendored clone:
-
-```
-models/freqnet/FreqNet-DeepfakeDetection/4-classes-freqnet-v2.pth
-```
+This clones `FreqNet-DeepfakeDetection`, creates `models/freqnet/venv/`, and installs both the
+repo's own `requirements.txt` and ours. It does **not** install `torch`/`torchvision` — install
+those separately, matched to your local CUDA version. The pretrained checkpoint
+(`4-classes-freqnet-v2.pth`) ships inside the cloned repo already — no separate download needed.
 
 ## Model convention
 

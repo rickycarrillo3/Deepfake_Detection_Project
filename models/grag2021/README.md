@@ -7,18 +7,12 @@ exploration.
 ## Setup
 
 ```
-git clone https://github.com/grip-unina/GANimageDetection.git models/grag2021/GANimageDetection
-python -m venv models/grag2021/venv
-source models/grag2021/venv/bin/activate
-pip install -r models/grag2021/requirements.txt
+./models/grag2021/setup.sh
 ```
 
-Download the pretrained checkpoint into the vendored repo's `weights/` folder:
-
-```
-wget -O models/grag2021/GANimageDetection/weights/gandetection_resnet50nodown_stylegan2.pth \
-  https://www.grip.unina.it/download/prog/GANdetection/weights/gandetection_resnet50nodown_stylegan2.pth
-```
+This clones `GANimageDetection`, creates `models/grag2021/venv/`, installs `requirements.txt`, and
+downloads the pretrained checkpoint into the vendored repo's `weights/` folder. It does **not**
+install `torch`/`torchvision` — install those separately, matched to your local CUDA version.
 
 ## Model convention
 

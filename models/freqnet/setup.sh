@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+set -euo pipefail
+cd "$(dirname "${BASH_SOURCE[0]}")"
+
+if [ ! -d "FreqNet-DeepfakeDetection" ]; then
+  git clone https://github.com/chuangchuangtan/FreqNet-DeepfakeDetection.git FreqNet-DeepfakeDetection
+fi
+
+python3 -m venv venv
+source venv/bin/activate
+pip install --upgrade pip -q
+pip install -r FreqNet-DeepfakeDetection/requirements.txt
+pip install -r requirements.txt
+
+echo
+echo "Torch/torchvision are not installed by this script — install them separately, matched to"
+echo "your local CUDA version, e.g.:"
+echo "  source models/freqnet/venv/bin/activate && pip install torch torchvision"
+echo
+echo "The pretrained checkpoint (4-classes-freqnet-v2.pth) ships inside the cloned repo already —"
+echo "no separate download needed."

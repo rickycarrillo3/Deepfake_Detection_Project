@@ -6,14 +6,15 @@ deepfake detector. Ported from the `Co-Spy_Setup.ipynb` Colab exploration.
 ## Setup
 
 ```
-git clone https://github.com/Megum1/CO-SPY.git models/co-spy/CO-SPY
-python -m venv models/co-spy/venv
-source models/co-spy/venv/bin/activate
-pip install -r models/co-spy/requirements.txt
+./models/co-spy/setup.sh
 ```
 
-Then download pretrained checkpoints (see CO-SPY's own `pretrained/download.sh`, or the
-HuggingFace repo `ruojiruoli/Co-Spy-Pretrained-*`) so that each `<train_dataset>` name has:
+This clones `CO-SPY`, creates `models/co-spy/venv/`, and installs `requirements.txt`. It does
+**not** install `torch`/`torchvision` (install those separately, matched to your local CUDA
+version) or download pretrained checkpoints.
+
+Download pretrained checkpoints (see CO-SPY's own `pretrained/download.sh`, or the HuggingFace repo
+`ruojiruoli/Co-Spy-Pretrained-*`) so that each `<train_dataset>` name has:
 
 ```
 models/co-spy/CO-SPY/pretrained/<train_dataset>/semantic_weights.pth
