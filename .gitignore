@@ -16,6 +16,11 @@ models/*/venv/
 models/*/.venv/
 models/*/env/
 
+# Vendored clones of each model's upstream GitHub repo
+models/co-spy/CO-SPY/
+models/grag2021/GANimageDetection/
+models/freqnet/FreqNet-DeepfakeDetection/
+
 # Python
 __pycache__/
 *.pyc

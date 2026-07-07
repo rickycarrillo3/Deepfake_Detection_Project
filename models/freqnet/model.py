@@ -25,6 +25,13 @@ class FreqNetModel:
     def load(self):
         if REPO_DIR not in sys.path:
             sys.path.insert(0, REPO_DIR)
+
+        if self.device == "cpu":
+            # The vendored FreqNet architecture unconditionally calls .cuda() on some
+            # parameters in its __init__, assuming a GPU is always present. No-op it so
+            # the model can be constructed on CPU-only machines.
+            torch.Tensor.cuda = lambda self, *args, **kwargs: self
+
         from networks.freqnet import freqnet
 
         self.model = freqnet(num_classes=1)
