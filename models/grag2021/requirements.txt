@@ -1,0 +1,6 @@
+# torch / torchvision are intentionally omitted — install separately, matched to local CUDA.
+numpy
+pillow
+pandas
+scikit-learn
+tqdm

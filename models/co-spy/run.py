@@ -1,7 +1,6 @@
 import argparse
 import os
 import sys
-import time
 
 import pandas as pd
 from tqdm import tqdm
@@ -28,22 +27,14 @@ def main():
     model.load()
 
     rows = []
-    total_time = 0.0
     for image_path, label in tqdm(pairs, desc=args.dataset):
-        start = time.time()
         score = model.predict(image_path)
-        total_time += time.time() - start
         rows.append({"filepath": image_path, "score": round(score, 4), "label": label})
 
     os.makedirs(RESULTS_DIR, exist_ok=True)
     df = pd.DataFrame(rows)
     df.to_csv(os.path.join(RESULTS_DIR, f"{args.dataset}.csv"), index=False)
-
-    avg_time = total_time / len(rows) if rows else 0.0
-    pd.DataFrame([{"num_images": len(rows), "avg_seconds_per_image": round(avg_time, 4)}]).to_csv(
-        os.path.join(RESULTS_DIR, f"{args.dataset}_summary.csv"), index=False
-    )
-    print(f"Wrote {len(rows)} rows, avg {avg_time:.4f}s/image")
+    print(f"Wrote {len(rows)} rows")
 
 
 if __name__ == "__main__":
