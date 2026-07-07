@@ -1,0 +1,17 @@
+# Install torch / torchvision separately to match your local CUDA version.
+# Example for CUDA 12.1:
+#   pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
+
+numpy<2
+pillow
+pandas
+scikit-learn
+tqdm
+gdown
+ftfy==6.1.3
+regex
+timm==0.9.6
+open-clip-torch==2.24.0
+opencv-python-headless
+scipy
+git+https://github.com/openai/CLIP.git
