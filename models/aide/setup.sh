@@ -6,7 +6,7 @@ if [ ! -d "AIDE" ]; then
   git clone https://github.com/shilinyan99/AIDE.git AIDE
 fi
 
-python3.12 -m venv venv
+uv venv --python 3.12 venv
 source venv/bin/activate
 pip install --upgrade pip -q
 pip install -r requirements.txt
