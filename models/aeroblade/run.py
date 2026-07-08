@@ -23,6 +23,7 @@ import os
 import sys
 import time
 from collections import defaultdict
+from pathlib import Path
 
 import pandas as pd
 
@@ -57,17 +58,22 @@ def run(dataset_name: str):
         start = time.time()
         try:
             scored = aeroblade_model.predict_batch(shard_dir)
+            print("=== SCORED KEYS ===")
+            for k in scored.keys():
+                print(repr(k))
         except Exception as e:
             print(f"Skipping shard {shard_name}: {e}")
             continue
         elapsed = time.time() - start
 
         for image_path, label in label_map.items():
-            info = scored.get(str(image_path))
+            key = f"{Path(image_path).parent.name}/{Path(image_path).name}"
+            print("LOOKING FOR:", repr(key)) 
+            info = scored.get(key)
             if info is None:
                 print(f"No score returned for: {image_path}")
                 continue
-            row = {"filepath": image_path, "score": info["score"], "label": label}
+            row = {"filepath": key, "score": info["score"], "label": label}
             row.update({k: v for k, v in info.items() if k != "score"})
             results.append(row)
 

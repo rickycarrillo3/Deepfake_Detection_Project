@@ -48,7 +48,7 @@ from aeroblade.high_level_funcs import compute_distances
 
 AUTOENCODERS = [
     "CompVis/stable-diffusion-v1-1",        # SD1
-    "stabilityai/stable-diffusion-2-base",  # SD2
+#    "stabilityai/stable-diffusion-2-base",  # SD2
     "kandinsky-community/kandinsky-2-1",    # KD2.1
 ]
 DISTANCE_METRIC = "lpips_vgg_2"  # best-performing layer per the paper
@@ -84,6 +84,8 @@ def _extract_scores(distances):
     image_size, repo_id, transform, distance_metric, file, distance) into
     {image_path: {"score": ..., <ae_short_name>: raw_distance, ...}}."""
     results = {}
+    for file_path in distances["file"].unique():
+        print(repr(file_path))
     for file_path, group in distances.groupby("file"):
         per_ae = {
             _short_ae_name(row.repo_id): float(row.distance)
@@ -96,8 +98,12 @@ def _extract_scores(distances):
         else:
             best_distance = max(per_ae.values(), default=float("-inf"))
 
-        results[str(file_path)] = {"score": _reduce_to_score(best_distance), **per_ae}
+        key = f"{Path(file_path).parent.name}/{Path(file_path).name}"
 
+        results[key] = {
+            "score": _reduce_to_score(best_distance),
+            **per_ae,
+        }
     return results
 
 
@@ -122,7 +128,18 @@ def predict_batch(shard_dir):
         num_workers=NUM_WORKERS,
         compute_max=True,
     )
-    return _extract_scores(distances)
+    results = _extract_scores(distances)
+
+    shard = Path(shard_dir).name
+
+    results = {
+            f"{shard}/{filename.lstrip('/')}": info
+            for filename, info in results.items()
+    }
+
+    return results
+    
+    #return _extract_scores(distances)
 
 
 def predict(image_path: str) -> float:

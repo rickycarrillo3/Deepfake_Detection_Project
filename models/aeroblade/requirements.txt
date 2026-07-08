@@ -5,3 +5,4 @@
 #
 # This file only lists what run.py needs on top of that.
 pandas
+setuptools<81
