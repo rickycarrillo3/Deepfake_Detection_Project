@@ -6,7 +6,13 @@ if [ ! -d "CO-SPY" ]; then
   git clone https://github.com/Megum1/CO-SPY.git CO-SPY
 fi
 
-python3 -m venv venv
+# Interpreter used to build the venv. Override on clusters where the system
+# python3 is old, e.g. after `module load python/3.12.12`:
+#   PYTHON=python3.12 ./setup.sh
+PYTHON="${PYTHON:-python3}"
+echo "Building venv with: $("$PYTHON" --version) ($(command -v "$PYTHON"))"
+
+"$PYTHON" -m venv venv
 source venv/bin/activate
 pip install --upgrade pip -q
 pip install -r requirements.txt
