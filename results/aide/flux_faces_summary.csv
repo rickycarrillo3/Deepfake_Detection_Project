@@ -1,2 +1,0 @@
-model,dataset,num_images,total_seconds,avg_seconds_per_image,results_csv
-aide,flux_faces,10,18.007946,1.800795,/home/nathan/summer_urop_2026/Deepfake_Detection_Project/results/aide/flux_faces.csv
