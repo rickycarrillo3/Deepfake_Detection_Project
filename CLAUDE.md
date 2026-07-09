@@ -28,7 +28,8 @@ Data flows: `data/` (raw image shards) → `loaders/` (yield `(image_path, label
 - **`loaders/`** — shared dataset walking code. Must yield `(image_path, label)` lazily (never
   load all images into memory — runs happen at GPU-cluster scale), and must tolerate partial
   shard uploads by only iterating what currently exists on disk. Yielded `image_path` must be a
-  full/absolute path, matching the `image_path` column in `results/` CSVs.
+  full/absolute path (needed to open the file). The dataset-relative form written to `results/`
+  CSVs (e.g. `shard_01/00042.png`) is derived from it via `rel_to_dataset()`.
 
 - **`models/<model_name>/`** — one subdirectory per pretrained detector, each with its own isolated
   environment (`requirements.txt` or `environment.yml`, `venv/`/`.venv/`, `weights/`) since
@@ -37,8 +38,10 @@ Data flows: `data/` (raw image shards) → `loaders/` (yield `(image_path, label
   - `load()` — load weights and prepare the model for inference
   - `predict(image_path) -> score` — return a float score in `[0, 1]`
 
-- **`results/<model_name>/<dataset_name>.csv`** — output schema is `image_path` (string),
-  `score` (float `[0, 1]`, predicted fake-probability), `label` (int, ground truth). Each run
+- **`results/<model_name>/<dataset_name>.csv`** — output schema is `filepath` (string,
+  dataset-relative, e.g. `shard_01/00042.png`; unambiguous alongside the CSV's own
+  `<dataset_name>` in its path), `score` (float `[0, 1]`, predicted fake-probability), `label`
+  (int, ground truth). Each run
   should also record average per-image processing time (e.g. a companion
   `<dataset_name>_summary.csv` or a run-log row) — mechanism is left to the runner script, but keep
   it consistent across models. Unlike `data/` and model weights, these CSVs are small and tracked

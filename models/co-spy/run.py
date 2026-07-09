@@ -9,7 +9,7 @@ from model import CoSpyModel
 
 PROJECT_ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..")
 sys.path.insert(0, PROJECT_ROOT)
-from loaders.dataset import iter_dataset  # noqa: E402
+from loaders.dataset import iter_dataset, rel_to_dataset  # noqa: E402
 
 RESULTS_DIR = os.path.join(PROJECT_ROOT, "results", "co-spy")
 
@@ -29,7 +29,8 @@ def main():
     rows = []
     for image_path, label in tqdm(pairs, desc=args.dataset):
         score = model.predict(image_path)
-        rows.append({"filepath": image_path, "score": round(score, 4), "label": label})
+        rel_path = rel_to_dataset(image_path, args.dataset)
+        rows.append({"filepath": rel_path, "score": round(score, 4), "label": label})
 
     os.makedirs(RESULTS_DIR, exist_ok=True)
     df = pd.DataFrame(rows)
