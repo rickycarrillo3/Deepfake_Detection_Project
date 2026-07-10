@@ -11,7 +11,7 @@ from model import AIDEModel
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 sys.path.insert(0, PROJECT_ROOT)
 
-from loaders.dataset import iter_dataset  # noqa: E402
+from loaders.dataset import iter_dataset, rel_to_dataset  # noqa: E402
 
 MODEL_NAME = "aide"
 RESULTS_DIR = os.path.join(PROJECT_ROOT, "results", MODEL_NAME)
@@ -58,10 +58,11 @@ def main():
     for image_path, label in tqdm(pairs, desc=args.dataset):
         score = model.predict(image_path)
         final_label = args.force_label if args.force_label is not None else label
+        rel_path = rel_to_dataset(image_path, args.dataset)
         rows.append(
             {
-                "filepath": image_path,
-                "score": round(float(score), 6),
+                "filepath": rel_path,
+                "score": round(float(score), 4),
                 "label": int(final_label),
             }
         )

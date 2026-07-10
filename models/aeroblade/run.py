@@ -31,7 +31,7 @@ _REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")
 if _REPO_ROOT not in sys.path:
     sys.path.insert(0, _REPO_ROOT)
 
-from loaders.dataset import iter_dataset  # noqa: E402
+from loaders.dataset import iter_dataset, rel_to_dataset  # noqa: E402
 
 import model as aeroblade_model  # noqa: E402
 
@@ -73,7 +73,8 @@ def run(dataset_name: str):
             if info is None:
                 print(f"No score returned for: {image_path}")
                 continue
-            row = {"filepath": key, "score": info["score"], "label": label}
+            rel_path = rel_to_dataset(image_path, dataset_name)
+            row = {"filepath": rel_path, "score": round(info["score"], 4), "label": label}
             row.update({k: v for k, v in info.items() if k != "score"})
             results.append(row)
 

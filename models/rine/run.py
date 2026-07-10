@@ -23,7 +23,7 @@ _REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")
 if _REPO_ROOT not in sys.path:
     sys.path.insert(0, _REPO_ROOT)
 
-from loaders.dataset import iter_dataset  # noqa: E402
+from loaders.dataset import iter_dataset, rel_to_dataset  # noqa: E402
 
 import model as rine_model  # noqa: E402
 
@@ -56,7 +56,8 @@ def run(dataset_name: str):
 
         total_time += elapsed
         total_images += 1
-        results.append({"filepath": image_path, "score": score, "label": label})
+        rel_path = rel_to_dataset(image_path, dataset_name)
+        results.append({"filepath": rel_path, "score": round(score, 4), "label": label})
 
     if last_shard is not None:
         print(f"Finished folder: {last_shard}")

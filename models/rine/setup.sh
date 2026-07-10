@@ -21,21 +21,17 @@ if [ ! -e "ckpt" ] && [ -d "rine/ckpt" ]; then
     ln -s rine/ckpt ckpt
 fi
 
-# 2. Isolated venv, Python 3.9 (matches upstream's pinned torch build)
+# 2. Isolated venv. Interpreter used to build it is overridable — upstream
+# pins its torch build against Python 3.9, so on clusters load a matching
+# module and point PYTHON at it, e.g.:
+#   module load python/3.9 && PYTHON=python3.9 ./setup.sh
+PYTHON="${PYTHON:-python3}"
+echo "Building venv with: $("$PYTHON" --version) ($(command -v "$PYTHON"))"
+
 if [ -d "rine_env" ]; then
     echo "rine_env/ already exists, skipping venv creation."
-elif command -v python3.9 >/dev/null 2>&1; then
-    python3.9 -m venv rine_env
-elif command -v conda >/dev/null 2>&1; then
-    echo "python3.9 not found on PATH; creating the env via conda instead."
-    conda create --prefix ./rine_env python=3.9 pip -y
 else
-    echo "ERROR: python3.9 not found on PATH, and conda is not available to install it."
-    echo "Install Python 3.9 first, e.g.:"
-    echo "  macOS (Homebrew): brew install python@3.9"
-    echo "  pyenv:            pyenv install 3.9.18 && pyenv local 3.9.18"
-    echo "then re-run this script."
-    exit 1
+    "$PYTHON" -m venv rine_env
 fi
 
 rine_env/bin/pip install --upgrade pip
