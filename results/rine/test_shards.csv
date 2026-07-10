@@ -1,0 +1,5 @@
+filepath,score,label
+/orcd/home/002/donadeko/Deepfake_Detection_Project/loaders/../data/test_shards/shard_01/00737.png,0.9724497199058533,1
+/orcd/home/002/donadeko/Deepfake_Detection_Project/loaders/../data/test_shards/shard_01/real_dog.png,0.33279797434806824,1
+/orcd/home/002/donadeko/Deepfake_Detection_Project/loaders/../data/test_shards/shard_01/test_image_tpdne.png,0.9237343668937683,1
+/orcd/home/002/donadeko/Deepfake_Detection_Project/loaders/../data/test_shards/shard_01/woman_real.png,0.43907955288887024,1
