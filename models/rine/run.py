@@ -41,6 +41,7 @@ def run(dataset_name: str):
 
     for image_path, label in iter_dataset(dataset_name):
         shard = os.path.basename(os.path.dirname(image_path))
+        imgname = os.path.basename(image_path)
         if shard != last_shard:
             if last_shard is not None:
                 print(f"Finished folder: {last_shard}")
@@ -56,7 +57,7 @@ def run(dataset_name: str):
 
         total_time += elapsed
         total_images += 1
-        results.append({"filepath": image_path, "score": score, "label": label})
+        results.append({"filepath": f"{shard}/{imgname}", "score": score, "label": label})
 
     if last_shard is not None:
         print(f"Finished folder: {last_shard}")
