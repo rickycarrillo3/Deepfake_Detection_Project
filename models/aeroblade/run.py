@@ -32,6 +32,7 @@ if _REPO_ROOT not in sys.path:
     sys.path.insert(0, _REPO_ROOT)
 
 from loaders.dataset import iter_dataset, rel_to_dataset  # noqa: E402
+from metrics import print_run_summary  # noqa: E402
 
 import model as aeroblade_model  # noqa: E402
 
@@ -107,6 +108,9 @@ def run(dataset_name: str):
         f"CSV saved as {results_csv}\n"
         f"Summary saved as {summary_csv}"
     )
+    # total_time sums the predict_batch calls only, so it excludes model loading
+    # and the shard grouping — the same span run.py times for every other model.
+    print_run_summary(results, total_time)
 
 
 if __name__ == "__main__":

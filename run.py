@@ -13,15 +13,17 @@ model you are running:
 Writes:
     results/<model>/<dataset>.csv  (filepath, score, label)
 
-No timing is recorded: the models time themselves differently (some not at all),
-so per-image or total durations are not comparable across models and should not
-be written out as if they were.
+Accuracy and elapsed time are printed to the console at the end of a run, but
+never written to a CSV: the models time themselves differently (some not at
+all), so durations are not comparable across models and should not be recorded
+as if they were.
 """
 
 import argparse
 import importlib.util
 import os
 import sys
+import time
 
 import pandas as pd
 from tqdm import tqdm
@@ -31,6 +33,7 @@ if REPO_ROOT not in sys.path:
     sys.path.insert(0, REPO_ROOT)
 
 from loaders.dataset import iter_dataset, rel_to_dataset  # noqa: E402
+from metrics import print_run_summary  # noqa: E402
 
 # Model name -> directory holding its model.py. Names match results/<model>/.
 # Listed explicitly rather than discovered: the vendored upstream clones inside
@@ -90,6 +93,9 @@ def run(model_name, dataset_name, limit=None, force_label=None, model_kwargs=Non
     rows = []
     num_skipped = 0
 
+    # Timed from here: weight loading is one-off setup, not inference cost.
+    start = time.perf_counter()
+
     # Iterated lazily — datasets are too large to materialize at cluster scale.
     for image_path, label in tqdm(iter_dataset(dataset_name), desc=f"{model_name}/{dataset_name}", unit="img"):
         if limit is not None and len(rows) >= limit:
@@ -110,6 +116,8 @@ def run(model_name, dataset_name, limit=None, force_label=None, model_kwargs=Non
             }
         )
 
+    elapsed = time.perf_counter() - start
+
     if not rows:
         print(f"No images scored for dataset '{dataset_name}' — nothing to write.")
         return
@@ -123,6 +131,7 @@ def run(model_name, dataset_name, limit=None, force_label=None, model_kwargs=Non
     print(f"Wrote {len(rows)} rows to {results_csv}")
     if num_skipped:
         print(f"Skipped {num_skipped} image(s)")
+    print_run_summary(rows, elapsed)
 
 
 def main():

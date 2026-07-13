@@ -71,11 +71,16 @@ Data flows: `data/` (raw image shards) → `loaders/` (yield `(image_path, label
   `<dataset_name>` in its path), `score` (float `[0, 1]`, predicted fake-probability), `label`
   (int, ground truth). Written by `run.py`, so the schema is uniform by construction.
 
-  **No timing is recorded and no `_summary.csv` is written.** The models time themselves
+  **No timing is recorded to a CSV and no `_summary.csv` is written.** The models time themselves
   differently (some did not time at all before the runner was consolidated), so per-image or total
   durations are not comparable across models and should not be written out as if they were. Images
   that fail to score are skipped and counted to the console, not to a CSV. Do not reintroduce a
   timing CSV without first making the measurement genuinely comparable across models.
+
+  At the end of a run, accuracy (thresholded at `0.5`) and inference time are printed **to the
+  console** — see `metrics.py`, which both `run.py` and aeroblade's bespoke runner call so the
+  threshold and formatting cannot drift apart. The timer starts after `load()`, so it measures
+  inference and not one-off weight loading. These stay console-only for the reason above.
 
   Results contents are **git-ignored** (only `.gitkeep` + `README.md` are tracked) — everything
   produced so far has been throwaway test output. Revisit this once real benchmark runs land.
