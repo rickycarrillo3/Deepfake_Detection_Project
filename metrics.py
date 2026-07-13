@@ -22,4 +22,4 @@ def accuracy(rows):
 def print_run_summary(rows, elapsed_seconds):
     """Print accuracy and inference time. `elapsed_seconds` excludes model loading."""
     print(f"Accuracy: {accuracy(rows):.2f}")
-    print(f"Time elapsed: {elapsed_seconds:.2f}s")
+    print(f"Time elapsed: {elapsed_seconds:.4f}s")
