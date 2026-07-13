@@ -33,7 +33,7 @@ REPO_ROOT = os.path.dirname(os.path.abspath(__file__))
 if REPO_ROOT not in sys.path:
     sys.path.insert(0, REPO_ROOT)
 
-from loaders.dataset import iter_dataset, rel_to_dataset  # noqa: E402
+from loaders.dataset import count_dataset, iter_dataset, rel_to_dataset  # noqa: E402
 from metrics import print_run_summary  # noqa: E402
 
 # Model name -> directory holding its model.py. Names match results/<model>/.
@@ -99,8 +99,16 @@ def run(model_name, dataset_name, limit=None, force_label=None, model_kwargs=Non
     # bookkeeping — neither is model inference, so neither belongs in the total.
     elapsed = 0.0
 
-    # Iterated lazily — datasets are too large to materialize at cluster scale.
-    for image_path, label in tqdm(iter_dataset(dataset_name), desc=f"{model_name}/{dataset_name}", unit="img"):
+    # Counted up front so the bar has a total (percentage + ETA) — the walk opens no
+    # images, and the dataset is still iterated lazily below rather than materialized,
+    # which at cluster scale it cannot be.
+    total = count_dataset(dataset_name)
+    if limit is not None:
+        total = min(total, limit)
+
+    for image_path, label in tqdm(
+        iter_dataset(dataset_name), total=total, desc=f"{model_name}/{dataset_name}", unit="img"
+    ):
         if limit is not None and len(rows) >= limit:
             break
 
