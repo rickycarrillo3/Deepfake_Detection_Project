@@ -56,7 +56,7 @@ def run(dataset_name: str):
 
         total_time += elapsed
         total_images += 1
-        results.append({"filepath": image_path, "score": score, "label": label})
+        results.append({"filepath": f"{shard}/{os.path.basename(image_path)}", "score": score, "label": label})
 
     if last_shard is not None:
         print(f"Finished folder: {last_shard}")
