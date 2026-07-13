@@ -34,3 +34,6 @@ __pycache__/
 
 # OS
 .DS_Store
+
+# Claude
+.claude/
