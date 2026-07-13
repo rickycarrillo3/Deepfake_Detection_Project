@@ -1,0 +1,7 @@
+# CNNDetection's inference path (networks/resnet.py + demo.py) only needs
+# torch + torchvision + Pillow. This file lists what model.py / run.py need
+# on top of the torch install done in setup.sh.
+torch
+torchvision
+Pillow
+pandas
