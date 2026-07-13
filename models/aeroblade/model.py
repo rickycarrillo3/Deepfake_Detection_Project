@@ -84,8 +84,8 @@ def _extract_scores(distances):
     image_size, repo_id, transform, distance_metric, file, distance) into
     {image_path: {"score": ..., <ae_short_name>: raw_distance, ...}}."""
     results = {}
-    for file_path in distances["file"].unique():
-        print(repr(file_path))
+    #for file_path in distances["file"].unique():
+    #    print(repr(file_path))
     for file_path, group in distances.groupby("file"):
         per_ae = {
             _short_ae_name(row.repo_id): float(row.distance)

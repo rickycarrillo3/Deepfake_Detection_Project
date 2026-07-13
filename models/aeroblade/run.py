@@ -58,9 +58,9 @@ def run(dataset_name: str):
         start = time.time()
         try:
             scored = aeroblade_model.predict_batch(shard_dir)
-            print("=== SCORED KEYS ===")
-            for k in scored.keys():
-                print(repr(k))
+            #print("=== SCORED KEYS ===")
+            #for k in scored.keys():
+            #    print(repr(k))
         except Exception as e:
             print(f"Skipping shard {shard_name}: {e}")
             continue
@@ -68,7 +68,7 @@ def run(dataset_name: str):
 
         for image_path, label in label_map.items():
             key = f"{Path(image_path).parent.name}/{Path(image_path).name}"
-            print("LOOKING FOR:", repr(key)) 
+            #print("LOOKING FOR:", repr(key)) 
             info = scored.get(key)
             if info is None:
                 print(f"No score returned for: {image_path}")
