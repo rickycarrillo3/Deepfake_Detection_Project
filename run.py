@@ -13,10 +13,11 @@ model you are running:
 Writes:
     results/<model>/<dataset>.csv  (filepath, score, label)
 
-Accuracy and elapsed time are printed to the console at the end of a run, but
+Accuracy and inference time are printed to the console at the end of a run, but
 never written to a CSV: the models time themselves differently (some not at
 all), so durations are not comparable across models and should not be recorded
-as if they were.
+as if they were. The time sums the model's predict() calls only — not weight
+loading, and not this runner's dataset walking or CSV writing.
 """
 
 import argparse
@@ -93,20 +94,26 @@ def run(model_name, dataset_name, limit=None, force_label=None, model_kwargs=Non
     rows = []
     num_skipped = 0
 
-    # Timed from here: weight loading is one-off setup, not inference cost.
-    start = time.perf_counter()
+    # Summed over the predict() calls alone. Weight loading is one-off setup, and
+    # walking the dataset, building rows and writing the CSV are this runner's own
+    # bookkeeping — neither is model inference, so neither belongs in the total.
+    elapsed = 0.0
 
     # Iterated lazily — datasets are too large to materialize at cluster scale.
     for image_path, label in tqdm(iter_dataset(dataset_name), desc=f"{model_name}/{dataset_name}", unit="img"):
         if limit is not None and len(rows) >= limit:
             break
 
+        start = time.perf_counter()
         try:
             score = module.predict(image_path)
         except Exception as e:
             print(f"Skipping {image_path}: {e}")
             num_skipped += 1
             continue
+        # Only successful calls are added: a skipped image contributes no row, so
+        # its partial work would pad the time without padding what it is over.
+        elapsed += time.perf_counter() - start
 
         rows.append(
             {
@@ -115,8 +122,6 @@ def run(model_name, dataset_name, limit=None, force_label=None, model_kwargs=Non
                 "label": int(force_label if force_label is not None else label),
             }
         )
-
-    elapsed = time.perf_counter() - start
 
     if not rows:
         print(f"No images scored for dataset '{dataset_name}' — nothing to write.")

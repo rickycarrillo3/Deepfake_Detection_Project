@@ -20,6 +20,11 @@ def accuracy(rows):
 
 
 def print_run_summary(rows, elapsed_seconds):
-    """Print accuracy and inference time. `elapsed_seconds` excludes model loading."""
+    """Print accuracy and inference time.
+
+    `elapsed_seconds` must be the model's prediction calls summed on their own —
+    no weight loading, no dataset walking, no CSV writing — so that the number
+    reflects the model rather than the runner wrapped around it.
+    """
     print(f"Accuracy: {accuracy(rows):.2f}")
     print(f"Time elapsed: {elapsed_seconds:.4f}s")

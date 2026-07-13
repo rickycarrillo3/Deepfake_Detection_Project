@@ -79,8 +79,12 @@ Data flows: `data/` (raw image shards) → `loaders/` (yield `(image_path, label
 
   At the end of a run, accuracy (thresholded at `0.5`) and inference time are printed **to the
   console** — see `metrics.py`, which both `run.py` and aeroblade's bespoke runner call so the
-  threshold and formatting cannot drift apart. The timer starts after `load()`, so it measures
-  inference and not one-off weight loading. These stay console-only for the reason above.
+  threshold and formatting cannot drift apart. The reported time is the model's prediction calls
+  summed on their own: each `predict()` is timed individually and added up (aeroblade likewise sums
+  its `predict_batch()` calls), so it excludes one-off weight loading *and* the runner's own work —
+  walking the dataset, building rows, writing the CSV. Keep any new timing inside that span only;
+  a timer wrapped around the scoring loop silently bills the runner's bookkeeping to the model.
+  These stay console-only for the reason above.
 
   Results contents are **git-ignored** (only `.gitkeep` + `README.md` are tracked) — everything
   produced so far has been throwaway test output. Revisit this once real benchmark runs land.
