@@ -51,13 +51,13 @@ BESPOKE = {
     "aeroblade": "models/aeroblade/run.py",
 }
 
+# Deliberately no per-image or count columns: the models time themselves
+# differently (some not at all), so those numbers are not comparable across
+# models and should not look like they are.
 SUMMARY_COLUMNS = [
     "model",
     "dataset",
-    "num_images",
-    "num_skipped",
     "total_seconds",
-    "avg_seconds_per_image",
 ]
 
 
@@ -137,10 +137,7 @@ def run(model_name, dataset_name, limit=None, force_label=None, model_kwargs=Non
             {
                 "model": model_name,
                 "dataset": dataset_name,
-                "num_images": len(rows),
-                "num_skipped": num_skipped,
                 "total_seconds": round(total_seconds, 4),
-                "avg_seconds_per_image": round(total_seconds / len(rows), 4),
             }
         ],
         columns=SUMMARY_COLUMNS,

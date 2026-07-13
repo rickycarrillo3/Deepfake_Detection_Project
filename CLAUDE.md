@@ -71,8 +71,11 @@ Data flows: `data/` (raw image shards) → `loaders/` (yield `(image_path, label
   `<dataset_name>` in its path), `score` (float `[0, 1]`, predicted fake-probability), `label`
   (int, ground truth). Written by `run.py`, so the schema is uniform by construction.
 
-  Each run also writes a companion `<dataset_name>_summary.csv` recording processing time:
-  `model, dataset, num_images, num_skipped, total_seconds, avg_seconds_per_image`.
+  Each run also writes a companion `<dataset_name>_summary.csv`: `model, dataset, total_seconds`.
+  Deliberately no per-image average or image counts — the models time themselves differently (some
+  did not time at all before consolidation), so per-image numbers are not comparable across models
+  and should not be presented as if they were. `total_seconds` is a rough wall-clock figure only;
+  do not use it to rank models.
 
   Results contents are **git-ignored** (only `.gitkeep` + `README.md` are tracked) — everything
   produced so far has been throwaway test output. Revisit this once real benchmark runs land.
