@@ -48,6 +48,6 @@ fi
 
 echo ""
 echo "Setup complete. Run with:"
-echo "  PYTHONPATH=<repo_root> cnndetection_env/bin/python run.py <dataset_name>"
+echo "  (from repo root) models/cnndetection/cnndetection_env/bin/python run.py --model cnndetection --dataset <dataset_name>"
 echo "Single image:"
 echo "  cnndetection_env/bin/python predict_one.py /path/to/image.png"

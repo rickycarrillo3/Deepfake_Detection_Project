@@ -74,5 +74,5 @@ fi
 
 echo ""
 echo "Setup complete. Run either variant with:"
-echo "  cd grag2021_progan && PYTHONPATH=<repo_root> ../dmimagedetection_env/bin/python run.py <dataset_name>"
-echo "  cd grag2021_latent  && PYTHONPATH=<repo_root> ../dmimagedetection_env/bin/python run.py <dataset_name>"
+echo "  models/DMimageDetection/dmimagedetection_env/bin/python run.py --model grag2021_progan --dataset <dataset_name>"
+echo "  models/DMimageDetection/dmimagedetection_env/bin/python run.py --model grag2021_latent  --dataset <dataset_name>"

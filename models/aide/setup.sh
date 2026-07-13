@@ -33,7 +33,7 @@ echo "  # models/aide/AIDE/checkpoints/GenImage_train.pth"
 echo
 echo "After that, test from the repo root with:"
 echo "  source models/aide/venv/bin/activate"
-echo "  python models/aide/run.py --dataset flux_faces --force-label 1 --limit 10"
+echo "  models/aide/venv/bin/python run.py --model aide --dataset flux_faces --force-label 1 --limit 10"
 echo
 echo "For the full fake-only run:"
-echo "  python models/aide/run.py --dataset flux_faces --force-label 1"
+echo "  models/aide/venv/bin/python run.py --model aide --dataset flux_faces --force-label 1"

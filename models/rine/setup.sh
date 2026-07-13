@@ -53,4 +53,4 @@ rine_env/bin/pip install numpy==1.26.4
 
 echo ""
 echo "Setup complete. Run with:"
-echo "  PYTHONPATH=<repo_root> rine_env/bin/python run.py <dataset_name>"
+echo "  (from repo root) models/rine/rine_env/bin/python run.py --model rine --dataset <dataset_name>"

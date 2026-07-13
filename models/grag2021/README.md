@@ -41,5 +41,5 @@ Or run a full shard-based evaluation against `data/<dataset_name>/`, writing to
 `results/grag2021/<dataset_name>.csv`:
 
 ```
-python models/grag2021/run.py --dataset flux_faces
+models/grag2021/venv/bin/python run.py --model grag2021 --dataset flux_faces
 ```

@@ -50,5 +50,5 @@ Or run a full shard-based evaluation against `data/<dataset_name>/`, writing to
 `results/co-spy/<dataset_name>.csv`:
 
 ```
-python models/co-spy/run.py --dataset flux_faces --train-dataset sd-v1_4
+models/co-spy/venv/bin/python run.py --model co-spy --dataset flux_faces --model-arg train_dataset=sd-v1_4
 ```

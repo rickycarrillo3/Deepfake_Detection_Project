@@ -14,7 +14,6 @@ cnndetection/
 ├── setup.sh               # clones the repo, builds the venv, downloads weights
 ├── requirements.txt
 ├── model.py               # load()/predict() contract
-├── run.py                 # writes results/cnndetection/<dataset>.csv
 └── predict_one.py         # single-image CLI
 ```
 
@@ -34,9 +33,10 @@ it's safe to re-run.
 
 ## Running
 
+Run from the repo root, using this model's venv:
+
 ```bash
-cd models/cnndetection
-PYTHONPATH=<repo_root> cnndetection_env/bin/python run.py <dataset_name>
+models/cnndetection/cnndetection_env/bin/python run.py --model cnndetection --dataset <dataset_name>
 ```
 
 Single image from the terminal:
