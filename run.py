@@ -25,6 +25,7 @@ import importlib.util
 import os
 import sys
 import time
+from itertools import groupby
 
 import pandas as pd
 from tqdm import tqdm
@@ -33,7 +34,7 @@ REPO_ROOT = os.path.dirname(os.path.abspath(__file__))
 if REPO_ROOT not in sys.path:
     sys.path.insert(0, REPO_ROOT)
 
-from loaders.dataset import count_dataset, iter_dataset, rel_to_dataset  # noqa: E402
+from loaders.dataset import iter_dataset, rel_to_dataset  # noqa: E402
 from metrics import print_run_summary  # noqa: E402
 
 # Model name -> directory holding its model.py. Names match results/<model>/.
@@ -99,37 +100,46 @@ def run(model_name, dataset_name, limit=None, force_label=None, model_kwargs=Non
     # bookkeeping — neither is model inference, so neither belongs in the total.
     elapsed = 0.0
 
-    # Counted up front so the bar has a total (percentage + ETA) — the walk opens no
-    # images, and the dataset is still iterated lazily below rather than materialized,
-    # which at cluster scale it cannot be.
-    total = count_dataset(dataset_name)
-    if limit is not None:
-        total = min(total, limit)
-
-    for image_path, label in tqdm(
-        iter_dataset(dataset_name), total=total, desc=f"{model_name}/{dataset_name}", unit="img"
+    # One bar per shard, in order. iter_dataset() stays lazy and the dataset as a whole is
+    # never materialized (at cluster scale it cannot be), but a bar needs to know how many
+    # images it is counting towards before it starts, which a lazy stream cannot say. So
+    # buffer a single shard at a time: that is a bounded few thousand path strings, and it
+    # gives each shard's bar its total.
+    for shard_dir, shard_images in groupby(
+        iter_dataset(dataset_name), key=lambda pair: os.path.dirname(pair[0])
     ):
         if limit is not None and len(rows) >= limit:
             break
 
-        start = time.perf_counter()
-        try:
-            score = module.predict(image_path)
-        except Exception as e:
-            print(f"Skipping {image_path}: {e}")
-            num_skipped += 1
-            continue
-        # Only successful calls are added: a skipped image contributes no row, so
-        # its partial work would pad the time without padding what it is over.
-        elapsed += time.perf_counter() - start
+        shard_images = list(shard_images)
+        if limit is not None:
+            # Trim rather than break mid-bar, so the bar's total is what will actually be
+            # scored and it still fills to 100%.
+            shard_images = shard_images[: limit - len(rows)]
 
-        rows.append(
-            {
-                "filepath": rel_to_dataset(image_path, dataset_name),
-                "score": round(float(score), 4),
-                "label": int(force_label if force_label is not None else label),
-            }
-        )
+        for image_path, label in tqdm(
+            shard_images,
+            desc=f"{model_name}/{dataset_name} {os.path.basename(shard_dir)}",
+            unit="img",
+        ):
+            start = time.perf_counter()
+            try:
+                score = module.predict(image_path)
+            except Exception as e:
+                print(f"Skipping {image_path}: {e}")
+                num_skipped += 1
+                continue
+            # Only successful calls are added: a skipped image contributes no row, so
+            # its partial work would pad the time without padding what it is over.
+            elapsed += time.perf_counter() - start
+
+            rows.append(
+                {
+                    "filepath": rel_to_dataset(image_path, dataset_name),
+                    "score": round(float(score), 4),
+                    "label": int(force_label if force_label is not None else label),
+                }
+            )
 
     if not rows:
         print(f"No images scored for dataset '{dataset_name}' — nothing to write.")

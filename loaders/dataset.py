@@ -17,15 +17,6 @@ def rel_to_dataset(image_path, dataset_name, data_dir=DATA_DIR):
     return os.path.relpath(image_path, dataset_dir)
 
 
-def count_dataset(dataset_name, data_dir=DATA_DIR):
-    """Return how many images iter_dataset would yield, without holding any of them.
-
-    A second walk of the directory tree is cheap (no image is opened) and lets callers
-    give a progress bar a total, which iterating lazily otherwise cannot supply.
-    """
-    return sum(1 for _ in iter_dataset(dataset_name, data_dir=data_dir))
-
-
 def iter_dataset(dataset_name, data_dir=DATA_DIR):
     """Yield (image_path, label) pairs for data/<dataset_name>/shard_XX/*.png.
 
