@@ -45,7 +45,7 @@ models/rine/rine_env/bin/python run.py --model rine --dataset <dataset_name>
 ```
 
 e.g. `--dataset sd3_faces_shards` scores `data/sd3_faces_shards/shard_01..10/` and writes
-`results/rine/sd3_faces_shards.csv` (+ `_summary.csv`).
+`results/rine/sd3_faces_shards.csv`.
 
 ## Notes / assumptions carried over from the source notebook
 

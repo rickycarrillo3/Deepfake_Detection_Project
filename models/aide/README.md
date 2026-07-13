@@ -116,13 +116,7 @@ with only these columns:
 filepath,score,label
 ```
 
-The runner also writes a timing summary:
-
-```text
-results/aide/flux_faces_summary.csv
-```
-
-with run metadata such as number of images, total seconds, and average seconds per image.
+No timing summary is written — see `results/README.md` for why.
 
 ## Notes
 

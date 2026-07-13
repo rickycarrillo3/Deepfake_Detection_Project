@@ -11,15 +11,17 @@ model you are running:
     models/freqnet/venv/bin/python run.py --model freqnet --dataset ffhq_test
 
 Writes:
-    results/<model>/<dataset>.csv          (filepath, score, label)
-    results/<model>/<dataset>_summary.csv  (timing)
+    results/<model>/<dataset>.csv  (filepath, score, label)
+
+No timing is recorded: the models time themselves differently (some not at all),
+so per-image or total durations are not comparable across models and should not
+be written out as if they were.
 """
 
 import argparse
 import importlib.util
 import os
 import sys
-import time
 
 import pandas as pd
 from tqdm import tqdm
@@ -50,16 +52,6 @@ MODELS = {
 BESPOKE = {
     "aeroblade": "models/aeroblade/run.py",
 }
-
-# Deliberately no per-image or count columns: the models time themselves
-# differently (some not at all), so those numbers are not comparable across
-# models and should not look like they are.
-SUMMARY_COLUMNS = [
-    "model",
-    "dataset",
-    "total_seconds",
-]
-
 
 def load_model_module(model_name, model_dir):
     """Import models/<...>/model.py as a module.
@@ -96,7 +88,6 @@ def run(model_name, dataset_name, limit=None, force_label=None, model_kwargs=Non
     module.load(**(model_kwargs or {}))
 
     rows = []
-    total_seconds = 0.0
     num_skipped = 0
 
     # Iterated lazily — datasets are too large to materialize at cluster scale.
@@ -104,14 +95,12 @@ def run(model_name, dataset_name, limit=None, force_label=None, model_kwargs=Non
         if limit is not None and len(rows) >= limit:
             break
 
-        start = time.time()
         try:
             score = module.predict(image_path)
         except Exception as e:
             print(f"Skipping {image_path}: {e}")
             num_skipped += 1
             continue
-        total_seconds += time.time() - start
 
         rows.append(
             {
@@ -131,22 +120,9 @@ def run(model_name, dataset_name, limit=None, force_label=None, model_kwargs=Non
     results_csv = os.path.join(results_dir, f"{dataset_name}.csv")
     pd.DataFrame(rows, columns=["filepath", "score", "label"]).to_csv(results_csv, index=False)
 
-    summary_csv = os.path.join(results_dir, f"{dataset_name}_summary.csv")
-    pd.DataFrame(
-        [
-            {
-                "model": model_name,
-                "dataset": dataset_name,
-                "total_seconds": round(total_seconds, 4),
-            }
-        ],
-        columns=SUMMARY_COLUMNS,
-    ).to_csv(summary_csv, index=False)
-
     print(f"Wrote {len(rows)} rows to {results_csv}")
     if num_skipped:
         print(f"Skipped {num_skipped} image(s)")
-    print(f"Wrote timing summary to {summary_csv}")
 
 
 def main():
