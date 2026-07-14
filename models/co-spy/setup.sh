@@ -23,5 +23,5 @@ echo "your local CUDA version, e.g.:"
 echo "  source models/co-spy/venv/bin/activate && pip install torch torchvision"
 echo
 echo "Then download pretrained checkpoints, e.g.:"
-echo "  cd models/co-spy/CO-SPY && sh pretrained/download.sh"
+echo "  cd models/co-spy/CO-SPY/pretrained && sh download.sh   # cd in: it unzips into the CWD"
 echo "so that models/co-spy/CO-SPY/pretrained/<train_dataset>/{semantic,artifact,fusion}_weights.pth exist."

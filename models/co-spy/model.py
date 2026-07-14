@@ -34,13 +34,24 @@ class CoSpyModel:
         sys.modules["evaluate"] = cospy_eval_mod
         spec.loader.exec_module(cospy_eval_mod)
 
-        ckpt_dir = os.path.join(COSPY_DIR, "pretrained")
-        self.detector = cospy_eval_mod.Detector(
-            device=self.device,
-            train_dataset=self.train_dataset,
-            pretrain=True,
-            ckpt=ckpt_dir,
-        )
+        # With pretrain=True, CO-SPY's Detector ignores its ckpt argument and resolves weights
+        # from the *relative* path "pretrained/<train_dataset>/<branch>_weights.pth" — fine in
+        # the notebook this was ported from, where the CWD was CO-SPY/, but run.py imports us
+        # from the repo root, where that path does not exist. Score the constructor from inside
+        # COSPY_DIR so the relative lookup lands on models/co-spy/CO-SPY/pretrained/.
+        # (pretrain=False is not an escape: it expects <branch>/best_model.pth, which is not
+        # what the pretrained checkpoints are named.)
+        prev_cwd = os.getcwd()
+        os.chdir(COSPY_DIR)
+        try:
+            self.detector = cospy_eval_mod.Detector(
+                device=self.device,
+                train_dataset=self.train_dataset,
+                pretrain=True,
+            )
+        finally:
+            os.chdir(prev_cwd)
+
         self._patch_sem_forward()
         return self
 
