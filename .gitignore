@@ -18,6 +18,11 @@
 *.ckpt
 *.safetensors
 
+# RINE resolves its checkpoint from "ckpt/" relative to the CWD, and run.py runs
+# from the repo root, so models/rine/setup.sh drops a symlink to the vendored
+# checkpoints here. Anchored, so it does not hide a real ckpt/ inside a model dir.
+/ckpt
+
 # Per-model isolated environments
 models/*/venv/
 models/*/.venv/
