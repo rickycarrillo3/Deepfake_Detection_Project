@@ -55,8 +55,8 @@ class Grag2021Model:
                 logit = self.model(x).flatten()[0]
 
         logit = float(logit.detach().float().cpu())
-        # Model convention: negative logit means fake-like. Convert to fake-probability score.
-        return float(1 / (1 + np.exp(logit)))
+        # Model convention: positive logit means fake-like. Convert to fake-probability score.
+        return float(1 / (1 + np.exp(-logit)))
 
 
 _DEFAULT_MODEL = None
