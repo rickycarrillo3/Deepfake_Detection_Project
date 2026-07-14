@@ -14,13 +14,12 @@ else
     git clone https://github.com/mever-team/rine.git rine
 fi
 
-# The upstream code expects checkpoints at ./ckpt/, but the repository
-# stores them in ./rine/ckpt/. Create a symlink if needed.
-if [ ! -e "ckpt" ] && [ -d "rine/ckpt" ]; then
-    echo "Creating ckpt -> rine/ckpt symlink..."
-    ln -s rine/ckpt ckpt
+# Also symlink ckpt at the project root, since run.py is invoked from there
+PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+if [ ! -e "$PROJECT_ROOT/ckpt" ] && [ -d "rine/ckpt" ]; then
+    echo "Creating project-root ckpt -> models/rine/rine/ckpt symlink..."
+    ln -s models/rine/rine/ckpt "$PROJECT_ROOT/ckpt"
 fi
-
 # 2. Isolated venv. Interpreter used to build it is overridable — upstream
 # pins its torch build against Python 3.9, so on clusters load a matching
 # module and point PYTHON at it, e.g.:
@@ -35,21 +34,21 @@ else
 fi
 
 rine_env/bin/pip install --upgrade pip
-if [ "$(uname -s)" = "Darwin" ]; then
-    echo "macOS detected — installing plain (CPU/MPS) torch, no CUDA wheel index."
-    rine_env/bin/pip install torch==2.1.1 torchvision==0.16.1
-else
-    rine_env/bin/pip install torch==2.1.1 torchvision==0.16.1 \
-        --index-url https://download.pytorch.org/whl/cu118
-fi
+#if [ "$(uname -s)" = "Darwin" ]; then
+#    echo "macOS detected — installing plain (CPU/MPS) torch, no CUDA wheel index."
+#    rine_env/bin/pip install torch==2.1.1 torchvision==0.16.1
+#else
+#    rine_env/bin/pip install torch==2.2.0 torchvision==0.17.0 \
+#    --index-url https://download.pytorch.org/whl/cu118
+#fi
 
 rine_env/bin/pip install -r rine/requirements.txt
 rine_env/bin/pip install -r requirements.txt
 
 # 3. numpy gets bumped to 2.x by one of the above installs; RINE's
 #    src/utils needs 1.26.4, so pin it back down last.
-rine_env/bin/pip uninstall -y numpy
-rine_env/bin/pip install numpy==1.26.4
+rine_env/bin/pip uninstall -y numpy scipy scikit-learn
+rine_env/bin/pip install numpy==1.26.4 scipy==1.11.4 scikit-learn==1.3.2
 
 echo ""
 echo "Setup complete. Run with:"
