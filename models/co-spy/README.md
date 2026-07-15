@@ -34,10 +34,14 @@ not the same as the `<dataset_name>` being evaluated from `data/`.
 
 ## Known quirks (carried over from the notebook)
 
-- CO-SPY was built against older `transformers`; newer versions return a model output object from
-  CLIP instead of a raw tensor, and the `progan` checkpoint's CLIP variant expects multimodal
-  `pixel_values`/`input_ids` args instead of a single positional tensor. `model.py` monkey-patches
-  `detector.model.sem.forward` at load time to paper over both cases — see `_patch_sem_forward`.
+- The two checkpoints use different CLIP families in their semantic branch. `progan` uses a
+  HuggingFace `transformers` `CLIPModel`; the version we install returns a model-output object from
+  its forward instead of a raw tensor, and its multimodal signature needs a dummy `input_ids`
+  alongside `pixel_values`. `model.py` monkey-patches `detector.model.sem.forward` at load time to
+  paper over both — but **only for `progan`** (see `_patch_sem_forward`). `sd-v1_4` uses `open_clip`
+  SigLIP, whose upstream forward (`self.clip.encode_image(x)`) already returns a tensor; patching it
+  to call `self.clip(x)` instead yields open_clip's `(image, text, logit_scale)` tuple, which then
+  fails in `fc` with `linear(): argument 'input' must be Tensor, not tuple`, so it is left as-is.
 - With `pretrain=True`, CO-SPY's `Detector` ignores its `ckpt` argument and loads weights from the
   *relative* path `pretrained/<train_dataset>/<branch>_weights.pth`. That assumed the notebook's
   CWD (`CO-SPY/`), but `run.py` imports `model.py` from the repo root, so the lookup missed and
