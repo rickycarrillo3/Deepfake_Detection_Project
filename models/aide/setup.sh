@@ -49,7 +49,9 @@ else
   echo
   echo "Downloading AIDE pretrained checkpoints from Google Drive..."
   mkdir -p "$CHECKPOINT_DIR"
-  if gdown --folder "$CHECKPOINT_FOLDER_URL" -O "$CHECKPOINT_DIR" --quiet; then
+  # No --quiet: it suppresses gdown's per-file progress bars, leaving the (slow) folder
+  # download looking hung with no indication of progress.
+  if gdown --folder "$CHECKPOINT_FOLDER_URL" -O "$CHECKPOINT_DIR"; then
     echo "Checkpoint download complete. Contents of $CHECKPOINT_DIR:"
     ls -la "$CHECKPOINT_DIR"
   else
