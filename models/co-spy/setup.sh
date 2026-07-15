@@ -16,7 +16,25 @@ echo "Building venv with: $("$PYTHON" --version) ($(command -v "$PYTHON"))"
 source venv/bin/activate
 pip install --upgrade pip -q
 pip install -r requirements.txt
+echo
+echo "Downloading pretrained checkpoints..."
 
+cd CO-SPY/pretrained
+
+if [ -f "download.sh" ]; then
+    bash download.sh
+else
+    echo "Error: pretrained/download.sh not found."
+    exit 1
+fi
+
+echo
+echo "Verifying downloaded checkpoints..."
+
+find -name "*_weights.pth"
+
+echo
+echo "Setup complete."
 echo
 echo "Torch/torchvision are not installed by this script — install them separately, matched to"
 echo "your local CUDA version, e.g.:"
@@ -25,3 +43,6 @@ echo
 echo "Then download pretrained checkpoints, e.g.:"
 echo "  cd models/co-spy/CO-SPY/pretrained && sh download.sh   # cd in: it unzips into the CWD"
 echo "so that models/co-spy/CO-SPY/pretrained/<train_dataset>/{semantic,artifact,fusion}_weights.pth exist."
+echo
+echo "After that, test from the repo root with:"
+echo "	models/co-spy/venv/bin/python run.py --model co-spy --dataset <dataset> --model-arg train_dataset=<train_dataset(sd-v1_4 or progan)>"
