@@ -47,7 +47,8 @@ if [ -f "weights/Grag2021_progan/model_epoch_best.pth" ] && [ -f "weights/Grag20
     echo "Weights already present, skipping download."
 else
     echo "Downloading weights..."
-    dmimagedetection_env/bin/gdown --id 1sAoAuOGCWS4dAMBhDkRHgBf4SgBgvkVf -O weights.zip
+    # gdown 5.0 removed --id; the file id is now a positional argument.
+    dmimagedetection_env/bin/gdown 1sAoAuOGCWS4dAMBhDkRHgBf4SgBgvkVf -O weights.zip
     mkdir -p weights
     unzip -q weights.zip -d weights_extracted
     rm weights.zip
