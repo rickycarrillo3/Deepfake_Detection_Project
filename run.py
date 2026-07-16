@@ -13,6 +13,12 @@ model you are running:
 Writes:
     results/<model>/<dataset>.csv  (filepath, score, label)
 
+A model.py may optionally define a module-level `result_subdir()` function,
+called (with no arguments) after load() to override the "<model>" folder name
+above — e.g. so a model with a --model-arg that meaningfully changes its
+weights (like co-spy's train_dataset) can keep those runs' results separate.
+Models that don't define it keep writing to results/<model>/ exactly as before.
+
 Accuracy and inference time are printed to the console at the end of a run, but
 never written to a CSV: the models time themselves differently (some not at
 all), so durations are not comparable across models and should not be recorded
@@ -87,6 +93,16 @@ def parse_model_args(pairs):
     return kwargs
 
 
+def _result_subdir(module, model_name):
+    """results/<subdir>/ for this run — model_name, unless the model's module
+    defines result_subdir() to override it (e.g. to split runs of the same
+    model by a --model-arg that changes which weights were used)."""
+    override = getattr(module, "result_subdir", None)
+    if override is None:
+        return model_name
+    return override()
+
+
 def run(model_name, dataset_name, limit=None, force_label=None, model_kwargs=None):
     model_dir = os.path.join(REPO_ROOT, MODELS[model_name])
     module = load_model_module(model_name, model_dir)
@@ -145,7 +161,7 @@ def run(model_name, dataset_name, limit=None, force_label=None, model_kwargs=Non
         print(f"No images scored for dataset '{dataset_name}' — nothing to write.")
         return
 
-    results_dir = os.path.join(REPO_ROOT, "results", model_name)
+    results_dir = os.path.join(REPO_ROOT, "results", _result_subdir(module, model_name))
     os.makedirs(results_dir, exist_ok=True)
 
     results_csv = os.path.join(results_dir, f"{dataset_name}.csv")

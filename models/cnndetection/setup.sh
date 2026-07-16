@@ -20,21 +20,21 @@ fi
 PYTHON="${PYTHON:-python3}"
 echo "Building venv with: $("$PYTHON" --version) ($(command -v "$PYTHON"))"
 
-if [ -d "cnndetection_env" ]; then
-    echo "cnndetection_env/ already exists, skipping venv creation."
+if [ -d "venv" ]; then
+    echo "venv/ already exists, skipping venv creation."
 else
-    "$PYTHON" -m venv cnndetection_env
+    "$PYTHON" -m venv venv
 fi
 
-cnndetection_env/bin/pip install --upgrade pip
+venv/bin/pip install --upgrade pip
 if [ "$(uname -s)" = "Darwin" ]; then
     echo "macOS detected — installing plain (CPU/MPS) torch, no CUDA wheel index."
-    cnndetection_env/bin/pip install torch torchvision
+    venv/bin/pip install torch torchvision
 else
-    cnndetection_env/bin/pip install torch torchvision \
+    venv/bin/pip install torch torchvision \
         --index-url https://download.pytorch.org/whl/cu118
 fi
-cnndetection_env/bin/pip install -r requirements.txt
+venv/bin/pip install -r requirements.txt
 
 # 3. Weights — download_weights.sh (shipped in the repo) fetches both
 #    blur_jpg_prob0.5.pth and blur_jpg_prob0.1.pth into CNNDetection/weights/.
@@ -48,6 +48,6 @@ fi
 
 echo ""
 echo "Setup complete. Run with:"
-echo "  (from repo root) models/cnndetection/cnndetection_env/bin/python run.py --model cnndetection --dataset <dataset_name>"
+echo "  (from repo root) models/cnndetection/venv/bin/python run.py --model cnndetection --dataset <dataset_name>"
 echo "Single image:"
-echo "  cnndetection_env/bin/python predict_one.py /path/to/image.png"
+echo "  venv/bin/python predict_one.py /path/to/image.png"

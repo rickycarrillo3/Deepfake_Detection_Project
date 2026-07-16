@@ -10,7 +10,7 @@ outputs a single logit that `sigmoid()` turns into a per-image fake-probability.
 cnndetection/
 ├── CNNDetection/          # vendored clone (networks/, demo.py, weights/)
 │   └── weights/blur_jpg_prob0.5.pth
-├── cnndetection_env/      # isolated venv
+├── venv/      # isolated venv
 ├── setup.sh               # clones the repo, builds the venv, downloads weights
 ├── requirements.txt
 ├── model.py               # load()/predict() contract
@@ -36,11 +36,11 @@ it's safe to re-run.
 Run from the repo root, using this model's venv:
 
 ```bash
-models/cnndetection/cnndetection_env/bin/python run.py --model cnndetection --dataset <dataset_name>
+models/cnndetection/venv/bin/python run.py --model cnndetection --dataset <dataset_name>
 ```
 
 Single image from the terminal:
 ```bash
 cd models/cnndetection
-cnndetection_env/bin/python predict_one.py /path/to/image.png
+venv/bin/python predict_one.py /path/to/image.png
 ```

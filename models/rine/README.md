@@ -24,7 +24,7 @@ bash setup.sh
 
 1. Vendors the upstream repo (contains `src/`, `ckpt/`, `demo/`, `scripts/`)
    via `git clone https://github.com/mever-team/rine.git rine`.
-2. Creates an isolated venv, `rine_env`, on Python 3.9 (matches upstream's
+2. Creates an isolated venv, `venv`, on Python 3.9 (matches upstream's
    pinned torch build).
 3. Installs `torch==2.1.1` / `torchvision==0.16.1` from the cu118 wheel
    index, then `rine/requirements.txt` and this directory's
@@ -41,7 +41,7 @@ from Drive/S3 at load time).
 Run from the repo root, using this model's venv:
 
 ```bash
-models/rine/rine_env/bin/python run.py --model rine --dataset <dataset_name>
+models/rine/venv/bin/python run.py --model rine --dataset <dataset_name>
 ```
 
 e.g. `--dataset sd3_faces_shards` scores `data/sd3_faces_shards/shard_01..10/` and writes

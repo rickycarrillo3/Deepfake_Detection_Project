@@ -23,21 +23,21 @@ fi
 PYTHON="${PYTHON:-python3}"
 echo "Building venv with: $("$PYTHON" --version) ($(command -v "$PYTHON"))"
 
-if [ -d "dmimagedetection_env" ]; then
-    echo "dmimagedetection_env/ already exists, skipping venv creation."
+if [ -d "venv" ]; then
+    echo "venv/ already exists, skipping venv creation."
 else
-    "$PYTHON" -m venv dmimagedetection_env
+    "$PYTHON" -m venv venv
 fi
 
-dmimagedetection_env/bin/pip install --upgrade pip
+venv/bin/pip install --upgrade pip
 if [ "$(uname -s)" = "Darwin" ]; then
     echo "macOS detected — installing plain (CPU/MPS) torch, no CUDA wheel index."
-    dmimagedetection_env/bin/pip install torch torchvision
+    venv/bin/pip install torch torchvision
 else
-    dmimagedetection_env/bin/pip install torch torchvision \
+    venv/bin/pip install torch torchvision \
         --index-url https://download.pytorch.org/whl/cu118
 fi
-dmimagedetection_env/bin/pip install -r requirements.txt
+venv/bin/pip install -r requirements.txt
 
 # 3. Weights — both variants ship in the same zip, downloaded once here.
 #    Expected layout after extraction:
@@ -48,7 +48,7 @@ if [ -f "weights/Grag2021_progan/model_epoch_best.pth" ] && [ -f "weights/Grag20
 else
     echo "Downloading weights..."
     # gdown 5.0 removed --id; the file id is now a positional argument.
-    dmimagedetection_env/bin/gdown 1sAoAuOGCWS4dAMBhDkRHgBf4SgBgvkVf -O weights.zip
+    venv/bin/gdown 1sAoAuOGCWS4dAMBhDkRHgBf4SgBgvkVf -O weights.zip
     mkdir -p weights
     unzip -q weights.zip -d weights_extracted
     rm weights.zip
@@ -75,5 +75,5 @@ fi
 
 echo ""
 echo "Setup complete. Run either variant with:"
-echo "  models/DMimageDetection/dmimagedetection_env/bin/python run.py --model grag2021_progan --dataset <dataset_name>"
-echo "  models/DMimageDetection/dmimagedetection_env/bin/python run.py --model grag2021_latent  --dataset <dataset_name>"
+echo "  models/DMimageDetection/venv/bin/python run.py --model grag2021_progan --dataset <dataset_name>"
+echo "  models/DMimageDetection/venv/bin/python run.py --model grag2021_latent  --dataset <dataset_name>"

@@ -12,7 +12,7 @@ duplicating it.
 ```
 DMimageDetection/
 ├── dmimagedetection/          # vendored clone (shared)
-├── dmimagedetection_env/      # shared venv
+├── venv/      # shared venv
 ├── weights/
 │   ├── Grag2021_progan/model_epoch_best.pth
 │   └── Grag2021_latent/model_epoch_best.pth
@@ -48,14 +48,14 @@ Each variant is run independently and writes its own `results/` output. Run from
 the repo root, using the shared venv — each variant is its own `--model`:
 
 ```bash
-models/DMimageDetection/dmimagedetection_env/bin/python run.py --model grag2021_progan --dataset <dataset_name>
-models/DMimageDetection/dmimagedetection_env/bin/python run.py --model grag2021_latent  --dataset <dataset_name>
+models/DMimageDetection/venv/bin/python run.py --model grag2021_progan --dataset <dataset_name>
+models/DMimageDetection/venv/bin/python run.py --model grag2021_latent  --dataset <dataset_name>
 ```
 
 Single image from the terminal (either variant):
 ```bash
 cd models/DMimageDetection/grag2021_progan
-../dmimagedetection_env/bin/python predict_one.py /path/to/image.png
+../venv/bin/python predict_one.py /path/to/image.png
 ```
 
 ## Why not merge the two into one model.py?
