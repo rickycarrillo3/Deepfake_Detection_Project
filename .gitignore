@@ -3,6 +3,13 @@
 !/data/.gitkeep
 !/data/README.md
 
+# Results (regenerated per run; keep only the folder structure + docs)
+/results/**
+!/results/**/
+!/results/.gitkeep
+!/results/README.md
+!/results/**/.gitkeep
+
 # Model weights
 *.pth
 *.pt
@@ -10,6 +17,11 @@
 *.h5
 *.ckpt
 *.safetensors
+
+# RINE resolves its checkpoint from "ckpt/" relative to the CWD, and run.py runs
+# from the repo root, so models/rine/setup.sh drops a symlink to the vendored
+# checkpoints here. Anchored, so it does not hide a real ckpt/ inside a model dir.
+/ckpt
 
 # Per-model isolated environments
 models/*/venv/
@@ -27,3 +39,6 @@ __pycache__/
 
 # OS
 .DS_Store
+
+# Claude
+.claude/

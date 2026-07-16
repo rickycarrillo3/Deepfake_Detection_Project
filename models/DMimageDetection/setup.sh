@@ -16,17 +16,17 @@ else
     git clone https://github.com/grip-unina/DMimageDetection.git dmimagedetection
 fi
 
-# 2. One shared venv for both variants (identical deps).
+# 2. One shared venv for both variants (identical deps). Interpreter used to
+# build it is overridable — on clusters where the system python3 is old, load
+# a module and point PYTHON at it, e.g.:
+#   module load python/3.12.12 && PYTHON=python3.12 ./setup.sh
+PYTHON="${PYTHON:-python3}"
+echo "Building venv with: $("$PYTHON" --version) ($(command -v "$PYTHON"))"
+
 if [ -d "dmimagedetection_env" ]; then
     echo "dmimagedetection_env/ already exists, skipping venv creation."
-elif command -v python3 >/dev/null 2>&1; then
-    python3 -m venv dmimagedetection_env
-elif command -v conda >/dev/null 2>&1; then
-    echo "python3 not found on PATH; creating the env via conda instead."
-    conda create --prefix ./dmimagedetection_env python=3.10 pip -y
 else
-    echo "ERROR: no python3 found on PATH, and conda is not available."
-    exit 1
+    "$PYTHON" -m venv dmimagedetection_env
 fi
 
 dmimagedetection_env/bin/pip install --upgrade pip
@@ -47,7 +47,8 @@ if [ -f "weights/Grag2021_progan/model_epoch_best.pth" ] && [ -f "weights/Grag20
     echo "Weights already present, skipping download."
 else
     echo "Downloading weights..."
-    dmimagedetection_env/bin/gdown --id 1sAoAuOGCWS4dAMBhDkRHgBf4SgBgvkVf -O weights.zip
+    # gdown 5.0 removed --id; the file id is now a positional argument.
+    dmimagedetection_env/bin/gdown 1sAoAuOGCWS4dAMBhDkRHgBf4SgBgvkVf -O weights.zip
     mkdir -p weights
     unzip -q weights.zip -d weights_extracted
     rm weights.zip
@@ -74,5 +75,5 @@ fi
 
 echo ""
 echo "Setup complete. Run either variant with:"
-echo "  cd grag2021_progan && PYTHONPATH=<repo_root> ../dmimagedetection_env/bin/python run.py <dataset_name>"
-echo "  cd grag2021_latent  && PYTHONPATH=<repo_root> ../dmimagedetection_env/bin/python run.py <dataset_name>"
+echo "  models/DMimageDetection/dmimagedetection_env/bin/python run.py --model grag2021_progan --dataset <dataset_name>"
+echo "  models/DMimageDetection/dmimagedetection_env/bin/python run.py --model grag2021_latent  --dataset <dataset_name>"

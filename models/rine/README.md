@@ -3,12 +3,12 @@
 Wraps [mever-team/rine](https://github.com/mever-team/rine) ("Leveraging
 Representations from Intermediate Encoder-blocks for Synthetic Image
 Detection") behind the repo's `load()` / `predict(image_path) -> score`
-contract, so `run.py` can be pointed at any dataset under `data/` via
-`loaders.iter_dataset`.
+contract, so the shared top-level `run.py` can be pointed at any dataset under
+`data/` via `loaders.iter_dataset`.
 
 Ported from a one-off Colab notebook that cloned the repo, ran
 `demo/demo.py` as a smoke test, then scored 10 shards with a standalone
-`test.py` — see `run.py` for the equivalent, repo-integrated version.
+`test.py` — the top-level `run.py` is the equivalent, repo-integrated version.
 
 ## Setup
 
@@ -38,14 +38,14 @@ from Drive/S3 at load time).
 
 ## Run
 
+Run from the repo root, using this model's venv:
+
 ```bash
-cd models/rine
-PYTHONPATH=<repo_root> rine_env/bin/python run.py <dataset_name>
+models/rine/rine_env/bin/python run.py --model rine --dataset <dataset_name>
 ```
 
-e.g. `PYTHONPATH=/path/to/repo rine_env/bin/python run.py sd3_faces_shards`
-scores `data/sd3_faces_shards/shard_01..10/` and writes
-`results/rine/sd3_faces_shards.csv` (+ `_summary.csv`).
+e.g. `--dataset sd3_faces_shards` scores `data/sd3_faces_shards/shard_01..10/` and writes
+`results/rine/sd3_faces_shards.csv`.
 
 ## Notes / assumptions carried over from the source notebook
 

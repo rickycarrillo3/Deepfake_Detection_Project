@@ -14,21 +14,17 @@ else
     git clone https://github.com/jonasricker/aeroblade.git aeroblade
 fi
 
-# 2. Isolated venv, Python 3.10 (matches upstream's tested version)
+# 2. Isolated venv. Interpreter used to build it is overridable — upstream
+# tests on Python 3.10, so on clusters load a matching module and point PYTHON
+# at it, e.g.:
+#   module load python/3.10 && PYTHON=python3.10 ./setup.sh
+PYTHON="${PYTHON:-python3}"
+echo "Building venv with: $("$PYTHON" --version) ($(command -v "$PYTHON"))"
+
 if [ -d "aeroblade_env" ]; then
     echo "aeroblade_env/ already exists, skipping venv creation."
-elif command -v python3.10 >/dev/null 2>&1; then
-    python3.10 -m venv aeroblade_env
-elif command -v conda >/dev/null 2>&1; then
-    echo "python3.10 not found on PATH; creating the env via conda instead."
-    conda create --prefix ./aeroblade_env python=3.10 pip -y
 else
-    echo "ERROR: python3.10 not found on PATH, and conda is not available to install it."
-    echo "Install Python 3.10 first, e.g.:"
-    echo "  macOS (Homebrew): brew install python@3.10"
-    echo "  pyenv:            pyenv install 3.10.16 && pyenv local 3.10.16"
-    echo "then re-run this script."
-    exit 1
+    "$PYTHON" -m venv aeroblade_env
 fi
 
 aeroblade_env/bin/pip install --upgrade pip

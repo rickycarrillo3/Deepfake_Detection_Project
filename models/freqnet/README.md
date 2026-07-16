@@ -39,5 +39,5 @@ Or run a full shard-based evaluation against `data/<dataset_name>/`, writing to
 `results/freqnet/<dataset_name>.csv`:
 
 ```
-python models/freqnet/run.py --dataset flux_faces
+models/freqnet/venv/bin/python run.py --model freqnet --dataset flux_faces
 ```

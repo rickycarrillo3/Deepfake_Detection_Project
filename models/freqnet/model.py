@@ -47,3 +47,21 @@ class FreqNetModel:
         with torch.no_grad():
             prob = self.model(x).sigmoid().flatten().cpu().tolist()[0]
         return float(prob)
+
+
+_DEFAULT_MODEL = None
+
+
+def load(**kwargs):
+    """Module-level contract: load weights and return a ready FreqNetModel."""
+    global _DEFAULT_MODEL
+    _DEFAULT_MODEL = FreqNetModel(**kwargs)
+    _DEFAULT_MODEL.load()
+    return _DEFAULT_MODEL
+
+
+def predict(image_path):
+    """Module-level contract: predict fake-probability for one image path."""
+    if _DEFAULT_MODEL is None:
+        raise RuntimeError("Call load() before predict().")
+    return _DEFAULT_MODEL.predict(image_path)

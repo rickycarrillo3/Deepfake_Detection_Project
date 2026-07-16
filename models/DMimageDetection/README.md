@@ -20,11 +20,9 @@ DMimageDetection/
 ├── requirements.txt           # shared deps
 ├── grag2021_progan/
 │   ├── model.py                # load()/predict() contract
-│   ├── run.py                  # writes results/grag2021_progan/<dataset>.csv
 │   └── predict_one.py          # single-image CLI
 └── grag2021_latent/
     ├── model.py
-    ├── run.py                  # writes results/grag2021_latent/<dataset>.csv
     └── predict_one.py
 ```
 
@@ -46,15 +44,12 @@ above), `setup.sh` detects both `.pth` files and skips the download step.
 
 ## Running each variant
 
-Each variant is still run independently, from its own subfolder, since
-`results/` output is still per-model:
+Each variant is run independently and writes its own `results/` output. Run from
+the repo root, using the shared venv — each variant is its own `--model`:
 
 ```bash
-cd models/DMimageDetection/grag2021_progan
-PYTHONPATH=<repo_root> ../dmimagedetection_env/bin/python run.py <dataset_name>
-
-cd models/DMimageDetection/grag2021_latent
-PYTHONPATH=<repo_root> ../dmimagedetection_env/bin/python run.py <dataset_name>
+models/DMimageDetection/dmimagedetection_env/bin/python run.py --model grag2021_progan --dataset <dataset_name>
+models/DMimageDetection/dmimagedetection_env/bin/python run.py --model grag2021_latent  --dataset <dataset_name>
 ```
 
 Single image from the terminal (either variant):
@@ -65,8 +60,8 @@ cd models/DMimageDetection/grag2021_progan
 
 ## Why not merge the two into one model.py?
 
-They're kept as separate `model.py`/`run.py` pairs (rather than one
-script with a variant flag) because they're independent trained
+They're kept as separate `model.py` files, registered as two distinct
+models in the top-level `run.py` (rather than one model with a variant flag), because they're independent trained
 detectors for your correlation/ensembling analysis — you want
 `results/grag2021_progan/` and `results/grag2021_latent/` as genuinely
 separate signals, matching how `main.py` itself treats them as two

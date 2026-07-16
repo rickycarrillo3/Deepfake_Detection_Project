@@ -16,11 +16,27 @@ install `torch`/`torchvision` — install those separately, matched to your loca
 
 ## Model convention
 
-The network outputs a single logit per image (no sigmoid head). Per the notebook's convention,
-**negative logit means fake-like**. `model.py` converts this to the project's
-fake-probability-score convention via `score = sigmoid(-logit)`, so `score` stays a float in
-`[0, 1]` where higher = more likely fake, consistent with `models/README.md` and
-`results/README.md`.
+The network outputs a single logit per image (no sigmoid head). **Positive logit means fake-like.**
+`model.py` converts this to the project's fake-probability-score convention via
+`score = sigmoid(logit)`, so `score` stays a float in `[0, 1]` where higher = more likely fake,
+consistent with `models/README.md` and `results/README.md`.
+
+Upstream never states this sign, which is how it came to be inverted here: `main.py` writes the raw
+logit to CSV and applies no sigmoid and no threshold, so there is no 0.5 in the repo or the paper —
+the natural decision boundary is `logit = 0`, which is exactly `score = 0.5` once the sigmoid is
+applied with the correct sign. The convention was established empirically against the 12
+ground-truth-labeled images the upstream repo ships in `example_images/` (`real_*` / `fake_*`),
+scored with the `stylegan2` checkpoint:
+
+| class | mean logit |
+|-------|-----------:|
+| `real_*` | **-17.10** |
+| `fake_*` | **+14.41** |
+
+Before this was corrected, `model.py` used `sigmoid(-logit)`, which inverted every score: real
+images came out at ~0.99 and fakes at ~0.01. If you have results CSVs produced by the old code,
+they are wrong and should be regenerated, not patched — a saved `score` can be recovered as
+`1 - score`, but re-running is safer than trusting which files predate the fix.
 
 Images are resized to 256x256 (bilinear) before normalization with ImageNet mean/std — this
 matches the notebook's `FORCE_RESIZE=True` fast path, which trades a small amount of accuracy for
@@ -41,5 +57,5 @@ Or run a full shard-based evaluation against `data/<dataset_name>/`, writing to
 `results/grag2021/<dataset_name>.csv`:
 
 ```
-python models/grag2021/run.py --dataset flux_faces
+models/grag2021/venv/bin/python run.py --model grag2021 --dataset flux_faces
 ```
