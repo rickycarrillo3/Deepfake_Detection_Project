@@ -17,11 +17,7 @@ source venv/bin/activate
 pip install --upgrade pip -q
 pip install -r FreqNet-DeepfakeDetection/requirements.txt
 pip install -r requirements.txt
-
-echo
-echo "Torch/torchvision are not installed by this script — install them separately, matched to"
-echo "your local CUDA version, e.g.:"
-echo "  source models/freqnet/venv/bin/activate && pip install torch torchvision"
+pip install torch torchvision
 echo
 echo "The pretrained checkpoint (4-classes-freqnet-v2.pth) ships inside the cloned repo already —"
 echo "no separate download needed."

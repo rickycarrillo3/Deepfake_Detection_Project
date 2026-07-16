@@ -16,15 +16,7 @@ echo "Building venv with: $("$PYTHON" --version) ($(command -v "$PYTHON"))"
 source venv/bin/activate
 pip install --upgrade pip -q
 pip install -r requirements.txt
-
-echo
-echo "Torch/torchvision are not installed by this script — install them separately, matched to"
-echo "your local CUDA version, e.g.:"
-echo "  source models/aide/venv/bin/activate && pip install torch torchvision"
-echo
-echo "AIDE's own requirements may pin older torch versions, so this script only installs"
-echo "models/aide/requirements.txt. Do not blindly pip install AIDE/requirements.txt unless"
-echo "you intentionally want to change your torch/CUDA setup."
+pip install torch torchvision
 
 # ---------------------------------------------------------------------------
 # Download pretrained checkpoints from the AIDE authors' Google Drive folder.
@@ -66,7 +58,7 @@ else
 fi
 
 echo
-echo "After that, test from the repo root with:"
+echo "Test from the repo root with:"
 echo "  source models/aide/venv/bin/activate"
 echo "  models/aide/venv/bin/python run.py --model aide --dataset flux_faces --force-label 1 --limit 10"
 echo

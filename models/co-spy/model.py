@@ -89,4 +89,4 @@ def result_subdir():
     entirely and progan/sd-v1_4 runs shouldn't overwrite each other's CSVs."""
     if _DEFAULT_MODEL is None:
         raise RuntimeError("Call load() before result_subdir().")
-    return f"co-spy-{_DEFAULT_MODEL.train_dataset}"
+    return f"co-spy_{_DEFAULT_MODEL.train_dataset}"

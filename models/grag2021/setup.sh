@@ -16,6 +16,7 @@ echo "Building venv with: $("$PYTHON" --version) ($(command -v "$PYTHON"))"
 source venv/bin/activate
 pip install --upgrade pip -q
 pip install -r requirements.txt
+pip install torch torchvision
 
 mkdir -p GANimageDetection/weights
 WEIGHTS_PATH="GANimageDetection/weights/gandetection_resnet50nodown_stylegan2.pth"
@@ -24,7 +25,3 @@ if [ ! -f "$WEIGHTS_PATH" ]; then
     https://www.grip.unina.it/download/prog/GANdetection/weights/gandetection_resnet50nodown_stylegan2.pth
 fi
 
-echo
-echo "Torch/torchvision are not installed by this script — install them separately, matched to"
-echo "your local CUDA version, e.g.:"
-echo "  source models/grag2021/venv/bin/activate && pip install torch torchvision"
