@@ -7,6 +7,22 @@ Reads every detector CSV in results/, groups them by dataset
 correlations, and writes plots + CSVs into
 
 results/plots/<dataset>/
+
+Datasets here are a MIX of real (label=0) and fake (label=1) images, so every
+metric below is computed relative to the ground-truth label column in each
+CSV, not blindly derived from the score alone:
+
+  error_<model>     = abs(label - score)         -- 0 = perfect, 1 = maximally wrong
+  correct_<model>    = (delta_vector == label)     -- did this model's decision match the label
+  incorrect_<model>  = 1 - correct_<model>         -- used for "failure correlation" (do models
+                                                       fail on the same images), NOT raw delta_vector,
+                                                       since delta_vector=1 is a success on a fake
+                                                       image but a failure on a real one
+  oracle accuracy    = fraction of images where AT LEAST ONE model was correct
+
+delta_vector_<model> (raw score >= threshold) is still written to the
+combined CSV as a diagnostic, but is no longer what correlations or oracle
+accuracy are computed from.
 """
 
 from pathlib import Path
@@ -33,13 +49,20 @@ TRAINING_TYPE = {
     "grag2021": "GAN",
     "grag2021_latent": "DM",
     "grag2021_progan": "GAN",
-    "rine": "DM",
     "rine_1": "GAN1",
     "rine_2": "GAN2",
     "rine_4": "GAN4",
     "rine_ldm": "DM",
+    # NOTE: bare "rine" deliberately excluded — it collided with rine_ldm's
+    # pretty name ("rine (DM)" for both), and being alphabetically first,
+    # silently won every "duplicate model" skip in build_combined(), so
+    # rine_ldm's actual results were being discarded. If results/rine/ is
+    # stale (pre-checkpoint-variant), delete it on disk too.
 }
 
+# Benchmark accuracy to compare each dataset's models against (now plotted
+# against per-model ACCURACY, not raw positive rate — comparing an accuracy
+# figure to positive rate was only valid for an all-fake dataset).
 BENCHMARK_LINES = {
     "flux": 0.98,
     "ffhq": None,
@@ -78,6 +101,7 @@ def pretty_model_name(folder):
 
 def discover_datasets():
     datasets = {}
+    skipped_folders = set()
 
     for csv in RESULTS_DIR.rglob("*.csv"):
 
@@ -87,11 +111,18 @@ def discover_datasets():
         folder = csv.parent.name
 
         if folder not in TRAINING_TYPE:
+            skipped_folders.add(folder)
             continue
 
         dataset = csv.stem.replace("_faces", "")
 
         datasets.setdefault(dataset, []).append((pretty_model_name(folder), folder, csv))
+
+    if skipped_folders:
+        print(
+            "Skipping folder(s) not listed in TRAINING_TYPE (add them there if "
+            f"they should be included): {', '.join(sorted(skipped_folders))}\n"
+        )
 
     return datasets
 
@@ -104,6 +135,7 @@ def discover_datasets():
 def build_combined(entries):
 
     frames = []
+    label_frames = []
 
     used = set()
 
@@ -117,21 +149,43 @@ def build_combined(entries):
 
         df = pd.read_csv(csv).set_index("filepath").sort_index()
 
+        if "label" not in df.columns:
+            print(f"WARNING: {csv} has no 'label' column — skipping {model_name} (can't score correctness without it).")
+            continue
+
         score = df["score"].copy()
+        label = df["label"].astype(int)
 
         # Grag outputs are inverted
-        if folder == "grag2021":
-            score = 1 - score
+        #        if folder == "grag2021":
+        #            score = 1 - score
 
         sub = pd.DataFrame(index=df.index)
 
         sub[f"score_{model_name}"] = score
-        sub[f"delta_vector_{model_name}"] = (score >= DELTA_THRESHOLD).astype(int)
-        sub[f"error_{model_name}"] = 1 - score
+        delta = (score >= DELTA_THRESHOLD).astype(int)
+        sub[f"delta_vector_{model_name}"] = delta                       # diagnostic only, not used for correlation below
+        sub[f"error_{model_name}"] = (label - score).abs()               # label-aware: 0=perfect, 1=maximally wrong
+        correct = (delta == label).astype(int)
+        sub[f"correct_{model_name}"] = correct
+        sub[f"incorrect_{model_name}"] = 1 - correct                     # used for failure correlation
 
         frames.append(sub)
+        label_frames.append(label.rename(model_name))
+
+    if not frames:
+        raise ValueError("No usable models for this dataset (see warnings above).")
 
     combined = pd.concat(frames, axis=1, join="inner").sort_index()
+
+    # Sanity-check that every model's CSV agrees on the ground-truth label for
+    # the same image — they should, since label is a property of the image,
+    # not the model. Flag rather than silently trust it if they don't.
+    labels_df = pd.concat(label_frames, axis=1, join="inner").sort_index()
+    if not labels_df.eq(labels_df.iloc[:, 0], axis=0).all().all():
+        mismatched = (~labels_df.eq(labels_df.iloc[:, 0], axis=0).all(axis=1)).sum()
+        print(f"WARNING: {mismatched} image(s) have disagreeing labels across model CSVs for this dataset — using the first model's label for those.")
+    combined["label"] = labels_df.iloc[:, 0]
 
     # Remove PatchForensics
     combined = combined.drop(
@@ -155,18 +209,21 @@ def compute_correlations(combined):
 
     error_cols = [c for c in combined.columns if c.startswith("error_")]
 
-    delta_cols = [c for c in combined.columns if c.startswith("delta_vector_")]
+    # Failure correlation uses incorrect_ (label-aware: did this model get
+    # this image wrong), NOT delta_vector_ (raw "predicted fake" — which
+    # conflates success-on-fake and failure-on-real for a mixed dataset).
+    incorrect_cols = [c for c in combined.columns if c.startswith("incorrect_")]
 
-    valid_delta = [
+    valid_incorrect = [
         c
-        for c in delta_cols
+        for c in incorrect_cols
         if combined[c].nunique() > 1
     ]
 
-    removed = set(delta_cols) - set(valid_delta)
+    removed = set(incorrect_cols) - set(valid_incorrect)
 
     if removed:
-        print("\nIgnoring constant delta vectors:")
+        print("\nIgnoring constant incorrect vectors (model always right or always wrong on this dataset):")
 
         for c in sorted(removed):
             print(" ", c)
@@ -175,11 +232,11 @@ def compute_correlations(combined):
         "error_pearson":
             combined[error_cols].corr(method="pearson"),
 
-        "delta_pearson":
-            combined[valid_delta].corr(method="pearson"),
+        "failure_pearson":
+            combined[valid_incorrect].corr(method="pearson"),
 
-        "delta_spearman":
-            combined[valid_delta].corr(method="spearman"),
+        "failure_spearman":
+            combined[valid_incorrect].corr(method="spearman"),
     }
 
 
@@ -227,18 +284,21 @@ def plot_heatmap(corr, title, outfile):
     plt.close(fig)
 
 
-def plot_delta_rates(combined, title, outfile, benchmark=None):
+def plot_accuracy_rates(combined, title, outfile, benchmark=None):
+    """Per-model accuracy (fraction of images where delta_vector matched the
+    true label) — replaces the old raw positive-rate chart, which only meant
+    "accuracy" for an all-fake dataset."""
 
-    delta_cols = [
+    correct_cols = [
         c
         for c in combined.columns
-        if c.startswith("delta_vector_")
+        if c.startswith("correct_")
     ]
 
-    rates = combined[delta_cols].mean().sort_values(ascending=False)
+    rates = combined[correct_cols].mean().sort_values(ascending=False)
 
     labels = [
-        c.replace("delta_vector_", "")
+        c.replace("correct_", "")
         for c in rates.index
     ]
 
@@ -255,7 +315,7 @@ def plot_delta_rates(combined, title, outfile, benchmark=None):
 
     ax.set_ylim(0, 1.05)
 
-    ax.set_ylabel("Positive rate")
+    ax.set_ylabel("Accuracy")
     ax.set_title(title)
 
     ax.set_xticks(range(len(labels)))
@@ -289,23 +349,22 @@ def plot_delta_rates(combined, title, outfile, benchmark=None):
 
 
 def oracle_accuracy(combined):
+    """Fraction of images where AT LEAST ONE model was correct (delta_vector
+    matched the true label) — the achievable accuracy of an ideal selector
+    that always picks a correct model when one exists. No longer excludes
+    constant-positive-rate models: that was only a workaround for the old
+    "positive == correct" assumption, which correct_<model> no longer makes."""
 
-    delta_cols = [
+    correct_cols = [
         c
         for c in combined.columns
-        if c.startswith("delta_vector_")
+        if c.startswith("correct_")
     ]
 
-    delta_cols = [
-        c
-        for c in delta_cols
-        if combined[c].mean() < 1.0
-    ]
-
-    if not delta_cols:
+    if not correct_cols:
         return None
 
-    oracle = combined[delta_cols].any(axis=1)
+    oracle = combined[correct_cols].any(axis=1)
 
     return oracle.mean()
 
@@ -351,21 +410,21 @@ def main():
         )
 
         plot_heatmap(
-            corrs["delta_pearson"],
-            f"{dataset} — Delta Pearson",
-            outdir / "delta_correlation_pearson.png",
+            corrs["failure_pearson"],
+            f"{dataset} — Failure Pearson",
+            outdir / "failure_correlation_pearson.png",
         )
 
         plot_heatmap(
-            corrs["delta_spearman"],
-            f"{dataset} — Delta Spearman",
-            outdir / "delta_correlation_spearman.png",
+            corrs["failure_spearman"],
+            f"{dataset} — Failure Spearman",
+            outdir / "failure_correlation_spearman.png",
         )
 
-        plot_delta_rates(
+        plot_accuracy_rates(
             combined,
-            f"{dataset} — Positive Rate",
-            outdir / "delta_positive_rate.png",
+            f"{dataset} — Accuracy",
+            outdir / "accuracy.png",
             benchmark=BENCHMARK_LINES.get(dataset),
         )
 
