@@ -78,8 +78,19 @@ Data flows: `data/` (raw image shards) → `loaders/` (yield `(image_path, label
   `rineldm`, `rine1`, `rine2`, `rine4`. `aeroblade` gets no family suffix
   (`<dataset_name>_aeroblade_predictions.csv`). Output schema is `filepath` (string,
   dataset-relative, e.g. `shard_01/00042.png`; unambiguous alongside the CSV's own
-  `<dataset_name>` in its name), `score` (float `[0, 1]`, predicted fake-probability), `label`
-  (int, ground truth). Written by `run.py`, so the schema is uniform by construction.
+  `<dataset_name>` in its name), `score` (float `[0, 1]`, predicted fake-probability),
+  `Predicted label` (int `0`/`1`: `score` thresholded at `metrics.THRESHOLD`), and `resize`
+  (string: `"<N>x<N>"` when that run passed `--resize N`, else `"none"`). Written by `run.py`, so
+  the schema is uniform by construction. The **ground-truth** label (0 for datasets whose name
+  contains `ffhq`, 1 otherwise) is deliberately *not* a CSV column: it is recoverable from the
+  dataset name in the filename and is used only to score accuracy on the console.
+
+  `--resize N` standardizes the input for a fair cross-model comparison: `run.py` feeds every
+  model an identical N×N (bicubic) copy of each image *before* that model's own preprocessing,
+  rather than each model scoring at native resolution with only its own built-in resize. The
+  `resize` column records which regime produced each CSV so runs are not silently mixed. The
+  resize is done outside the timed span (it is runner bookkeeping, not model inference — see the
+  timing note below), and `aeroblade`'s bespoke runner does not support it.
 
   **No timing is recorded to a CSV and no `_summary.csv` is written.** The models time themselves
   differently (some did not time at all before the runner was consolidated), so per-image or total
