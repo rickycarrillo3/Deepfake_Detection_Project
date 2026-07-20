@@ -28,17 +28,38 @@ from src.utils import get_transforms, get_our_trained_model  # noqa: E402
 
 DEVICE = "cuda:0" if torch.cuda.is_available() else "cpu"
 
+# RINE ships checkpoints for multiple training configurations in ckpt/ —
+# model_1class_trainable.pth, model_2class_trainable.pth,
+# model_4class_trainable.pth, and model_ldm_trainable.pth (the original
+# default here). get_our_trained_model()'s ncls argument selects among them,
+# and — confirmed from src/utils.py — checks it as the INTEGER 1, 2, or 4, or
+# the literal string "ldm"; there is no other string form. Since --model-arg
+# always passes values through as strings, load() below coerces back to int
+# for anything other than "ldm".
+DEFAULT_NCLS = "ldm"
+
 # Module-level state populated by load(), consumed by predict()
 _model = None
 _transforms = None
+_ncls = None
 
 
-def load():
-    """Load RINE weights and prepare the model for inference."""
-    global _model, _transforms
+def load(ncls=None):
+    """Load RINE weights and prepare the model for inference.
+
+    ncls: which of RINE's shipped checkpoints to use — "ldm" (default,
+    matching the prior hardcoded behavior) or 1, 2, 4. Passed straight
+    through to get_our_trained_model, coerced to int unless it's "ldm"
+    (get_our_trained_model checks ncls==1/2/4 as integers, and --model-arg
+    always hands this function a string). Set via --model-arg ncls=<value>.
+    """
+    global _model, _transforms, _ncls
+
+    raw = ncls if ncls is not None else DEFAULT_NCLS
+    _ncls = raw if isinstance(raw, str) and raw.lower() == "ldm" else int(raw)
 
     _, _transforms, _ = get_transforms()
-    _model = get_our_trained_model(ncls="ldm", device=DEVICE)
+    _model = get_our_trained_model(ncls=_ncls, device=DEVICE)
     _model.to(DEVICE)
     _model.eval()
 
@@ -56,3 +77,13 @@ def predict(image_path: str) -> float:
         probability = torch.sigmoid(logit)
 
     return float(probability.detach().cpu().numpy()[0][0])
+
+
+def result_subdir():
+    """Optional runner contract (see run.py): split results by which RINE
+    checkpoint (ncls) was used, since --model-arg ncls=... changes the
+    weights entirely and different checkpoints shouldn't overwrite each
+    other's CSVs."""
+    if _ncls is None:
+        raise RuntimeError("Call load() before result_subdir().")
+    return f"rine_{_ncls}"

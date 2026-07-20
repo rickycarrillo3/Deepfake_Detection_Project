@@ -13,10 +13,16 @@ ImageFile.LOAD_TRUNCATED_IMAGES = True
 MODEL_DIR = Path(__file__).resolve().parent
 REPO_DIR = MODEL_DIR / "AIDE"
 
-# Default to the detector checkpoint used in the uploaded AIDE Colab.
-# You can override this without editing code:
-#   export AIDE_WEIGHTS_PATH=/absolute/path/to/checkpoint.pth
-DEFAULT_WEIGHTS_PATH = REPO_DIR / "checkpoints" / "GenImage_train.pth"
+# AIDE ships three detector checkpoints, trained on different fake-image
+# sources. checkpoint= selects among these by name; checkpoint_path= (or the
+# AIDE_WEIGHTS_PATH env var) overrides with an arbitrary path and takes
+# priority over checkpoint= if both are given.
+CHECKPOINT_FILES = {
+    "genimage": "GenImage_train.pth",
+    "progan": "progan_train.pth",
+    "sd14": "sd14_train.pth",
+}
+DEFAULT_CHECKPOINT = "genimage"
 
 AIDE_IMAGE_SIZE = 256
 
@@ -33,11 +39,23 @@ class AIDEModel:
       class 1 -> fake / AI-generated-like
     """
 
-    def __init__(self, device=None, checkpoint_path=None):
+    def __init__(self, device=None, checkpoint=None, checkpoint_path=None):
         self.device = torch.device(device or ("cuda" if torch.cuda.is_available() else "cpu"))
-        self.checkpoint_path = Path(
-            checkpoint_path or os.environ.get("AIDE_WEIGHTS_PATH", DEFAULT_WEIGHTS_PATH)
-        )
+        self.checkpoint_name = checkpoint or DEFAULT_CHECKPOINT
+
+        if checkpoint_path is not None:
+            # Explicit full-path override — wins over checkpoint= entirely.
+            self.checkpoint_path = Path(checkpoint_path)
+        elif os.environ.get("AIDE_WEIGHTS_PATH"):
+            self.checkpoint_path = Path(os.environ["AIDE_WEIGHTS_PATH"])
+        else:
+            if self.checkpoint_name not in CHECKPOINT_FILES:
+                raise ValueError(
+                    f"Unknown AIDE checkpoint '{self.checkpoint_name}'. "
+                    f"Choose one of: {', '.join(CHECKPOINT_FILES)}"
+                )
+            self.checkpoint_path = REPO_DIR / "checkpoints" / CHECKPOINT_FILES[self.checkpoint_name]
+
         self.model = None
         self.dct = None
 
@@ -63,8 +81,9 @@ class AIDEModel:
 
         if not self.checkpoint_path.exists():
             raise FileNotFoundError(
-                f"Missing AIDE checkpoint at {self.checkpoint_path}. "
-                "Download a .pth detector checkpoint into models/aide/AIDE/checkpoints/ "
+                f"Missing AIDE checkpoint '{self.checkpoint_name}' at {self.checkpoint_path}. "
+                f"Download the .pth detector checkpoints into models/aide/AIDE/checkpoints/ "
+                f"(expects one of: {', '.join(CHECKPOINT_FILES.values())}) "
                 "or set AIDE_WEIGHTS_PATH=/path/to/checkpoint.pth"
             )
 
@@ -160,10 +179,15 @@ class AIDEModel:
 _DEFAULT_MODEL = None
 
 
-def load(device=None, checkpoint_path=None):
-    """Module-level contract: load weights and return a ready AIDEModel."""
+def load(device=None, checkpoint=None, checkpoint_path=None):
+    """Module-level contract: load weights and return a ready AIDEModel.
+
+    checkpoint: one of "genimage" (default), "progan", "sd14" — selects which
+    of AIDE's shipped detector checkpoints to use, e.g. via
+    --model-arg checkpoint=progan.
+    """
     global _DEFAULT_MODEL
-    _DEFAULT_MODEL = AIDEModel(device=device, checkpoint_path=checkpoint_path).load()
+    _DEFAULT_MODEL = AIDEModel(device=device, checkpoint=checkpoint, checkpoint_path=checkpoint_path).load()
     return _DEFAULT_MODEL
 
 
@@ -172,3 +196,13 @@ def predict(image_path):
     if _DEFAULT_MODEL is None:
         raise RuntimeError("Call load() before predict().")
     return _DEFAULT_MODEL.predict(image_path)
+
+
+def result_subdir():
+    """Optional runner contract (see run.py): split results by which AIDE
+    checkpoint was used, since --model-arg checkpoint=... changes the weights
+    entirely and genimage/progan/sd14 runs shouldn't overwrite each other's
+    CSVs."""
+    if _DEFAULT_MODEL is None:
+        raise RuntimeError("Call load() before result_subdir().")
+    return f"aide_{_DEFAULT_MODEL.checkpoint_name}"

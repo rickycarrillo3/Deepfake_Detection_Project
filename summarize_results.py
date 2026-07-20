@@ -4,7 +4,9 @@ import pandas as pd
 RESULTS_DIR = Path("results")
 
 TRAINING_TYPE = {
-    "aide": "GAN",
+    "aide_genimage": "MIX",
+    "aide_progan": "GAN",
+    "aide_sd14": "DM",
     "cnndetection": "GAN",
     "co-spy_progan": "GAN",
     "co-spy_sd-v1_4": "DM",
@@ -13,6 +15,12 @@ TRAINING_TYPE = {
     "grag2021_latent": "DM",
     "grag2021_progan": "GAN",
     "rine": "DM",
+    "rine_1": "GAN1",
+    "rine_2": "GAN2",
+    "rine_4": "GAN4",
+    "rine_ldm": "DM",
+
+
 }
 
 summary = []
@@ -29,6 +37,10 @@ for csv_file in RESULTS_DIR.rglob("*.csv"):
         model = "DMimageDetection"
     elif folder in {"co-spy_progan", "co-spy_sd-v1_4"}:
         model = "co-spy"
+    elif folder in {"rine_1", "rine_2", "rine_4", "rine_ldm"}:
+        model = "rine"
+    elif folder in {"aide_genimage", "aide_progan", "aide_sd14"}:
+        model = "aide"
     else:
         model = folder
 
