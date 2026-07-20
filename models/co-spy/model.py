@@ -83,10 +83,13 @@ def predict(image_path):
     if _DEFAULT_MODEL is None:
         raise RuntimeError("Call load() before predict().")
     return _DEFAULT_MODEL.predict(image_path)
-def result_subdir():
-    """Optional runner contract (see run.py): split results by which pretrained
-    checkpoint was used, since --model-arg train_dataset=... changes the weights
-    entirely and progan/sd-v1_4 runs shouldn't overwrite each other's CSVs."""
+def result_stem():
+    """Optional runner contract (see run.py): the '<model>_<family>' middle of
+    the results filename. Co-Spy's generation family follows which pretrained
+    checkpoint was used (--model-arg train_dataset=...): progan is a GAN, every
+    other shipped checkpoint (sd-v1_4, ...) is a diffusion model. The differing
+    family also keeps progan/DM runs from overwriting each other's CSVs."""
     if _DEFAULT_MODEL is None:
-        raise RuntimeError("Call load() before result_subdir().")
-    return f"co-spy_{_DEFAULT_MODEL.train_dataset}"
+        raise RuntimeError("Call load() before result_stem().")
+    family = "GAN" if _DEFAULT_MODEL.train_dataset == "progan" else "DM"
+    return f"co-spy_{family}"

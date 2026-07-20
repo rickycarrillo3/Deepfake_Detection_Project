@@ -11,13 +11,16 @@ model you are running:
     models/freqnet/venv/bin/python run.py --model freqnet --dataset ffhq_test
 
 Writes:
-    results/<model>/<dataset>.csv  (filepath, score, label)
+    results/<dataset>_<model>_<family>_predictions.csv  (filepath, score, label)
 
-A model.py may optionally define a module-level `result_subdir()` function,
-called (with no arguments) after load() to override the "<model>" folder name
-above — e.g. so a model with a --model-arg that meaningfully changes its
-weights (like co-spy's train_dataset) can keep those runs' results separate.
-Models that don't define it keep writing to results/<model>/ exactly as before.
+where <family> is the generation family the detector was trained on (GAN/DM).
+A model.py may optionally define a module-level `result_stem()` function, called
+(with no arguments) after load() to override the "<model>_<family>" middle of
+that filename — this is how the family is supplied, and how a model with a
+--model-arg that meaningfully changes its weights (co-spy's train_dataset,
+rine's ncls, aide's checkpoint) keeps those runs in separate CSVs now that all
+results share one flat results/ directory. Models that don't define it fall back
+to just "<model>" (no family).
 
 Accuracy and inference time are printed to the console at the end of a run, but
 never written to a CSV: the models time themselves differently (some not at
@@ -93,11 +96,15 @@ def parse_model_args(pairs):
     return kwargs
 
 
-def _result_subdir(module, model_name):
-    """results/<subdir>/ for this run — model_name, unless the model's module
-    defines result_subdir() to override it (e.g. to split runs of the same
-    model by a --model-arg that changes which weights were used)."""
-    override = getattr(module, "result_subdir", None)
+def _result_stem(module, model_name):
+    """The '<model>_<family>' middle of this run's results filename.
+
+    Defaults to just model_name (no family). A model.py may define a
+    module-level result_stem() to override it — to append its generation family
+    (GAN/DM) and/or to distinguish checkpoints of the same model (rine's ncls,
+    co-spy's train_dataset, aide's checkpoint), so those runs don't overwrite
+    each other now that all CSVs share one flat results/ directory."""
+    override = getattr(module, "result_stem", None)
     if override is None:
         return model_name
     return override()
@@ -161,10 +168,11 @@ def run(model_name, dataset_name, limit=None, force_label=None, model_kwargs=Non
         print(f"No images scored for dataset '{dataset_name}' — nothing to write.")
         return
 
-    results_dir = os.path.join(REPO_ROOT, "results", _result_subdir(module, model_name))
+    results_dir = os.path.join(REPO_ROOT, "results")
     os.makedirs(results_dir, exist_ok=True)
 
-    results_csv = os.path.join(results_dir, f"{dataset_name}.csv")
+    stem = _result_stem(module, model_name)
+    results_csv = os.path.join(results_dir, f"{dataset_name}_{stem}_predictions.csv")
     pd.DataFrame(rows, columns=["filepath", "score", "label"]).to_csv(results_csv, index=False)
 
     print(f"Wrote {len(rows)} rows to {results_csv}")

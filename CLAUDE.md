@@ -17,7 +17,8 @@ ensembling / mixture of experts).
 ## Architecture
 
 Data flows: `data/` (raw image shards) → `loaders/` (yield `(image_path, label)` pairs) →
-`models/<model_name>/` (score each image) → `results/<model_name>/<dataset_name>.csv`.
+`models/<model_name>/` (score each image) →
+`results/<dataset_name>_<model_name>_<generation_family>_predictions.csv`.
 
 - **`run.py`** (repo root) — the single runner for every model. There is deliberately **no
   per-model `run.py`**: they were near-identical copies that drifted apart and had to be fixed
@@ -66,9 +67,18 @@ Data flows: `data/` (raw image shards) → `loaders/` (yield `(image_path, label
   `grag2021_progan`) sharing one venv and weights download, so model directories and detectors are
   not 1:1.
 
-- **`results/<model_name>/<dataset_name>.csv`** — output schema is `filepath` (string,
+- **`results/<dataset_name>_<model_name>_<generation_family>_predictions.csv`** — all results
+  live in one flat `results/` directory; the filename carries the dataset, model, and the
+  generation family the detector was trained on (`GAN`/`DM`). The `<model>_<family>` middle comes
+  from each model.py's optional module-level `result_stem()` (see `run.py`); models without it fall
+  back to just `<model_name>` (no family). For checkpoint-varying detectors the stem also encodes
+  the checkpoint so runs don't collide: co-spy's family follows `train_dataset` (progan→GAN,
+  else→DM), aide's follows `checkpoint` (progan→GAN, sd14→DM, genimage kept literal), and rine
+  (always trained on latent-diffusion data, so family `DM`) puts its `ncls` in the model slot —
+  `rineldm`, `rine1`, `rine2`, `rine4`. `aeroblade` gets no family suffix
+  (`<dataset_name>_aeroblade_predictions.csv`). Output schema is `filepath` (string,
   dataset-relative, e.g. `shard_01/00042.png`; unambiguous alongside the CSV's own
-  `<dataset_name>` in its path), `score` (float `[0, 1]`, predicted fake-probability), `label`
+  `<dataset_name>` in its name), `score` (float `[0, 1]`, predicted fake-probability), `label`
   (int, ground truth). Written by `run.py`, so the schema is uniform by construction.
 
   **No timing is recorded to a CSV and no `_summary.csv` is written.** The models time themselves

@@ -85,3 +85,9 @@ def predict(image_path: str) -> float:
         prob = _model(tensor).sigmoid().flatten().cpu().tolist()[0]
 
     return float(prob)
+
+
+def result_stem():
+    """Optional runner contract (see run.py): the '<model>_<family>' middle of
+    the results filename. CNNDetection was trained on GAN-generated images."""
+    return "cnndetection_GAN"

@@ -198,11 +198,15 @@ def predict(image_path):
     return _DEFAULT_MODEL.predict(image_path)
 
 
-def result_subdir():
-    """Optional runner contract (see run.py): split results by which AIDE
-    checkpoint was used, since --model-arg checkpoint=... changes the weights
-    entirely and genimage/progan/sd14 runs shouldn't overwrite each other's
-    CSVs."""
+def result_stem():
+    """Optional runner contract (see run.py): the '<model>_<family>' middle of
+    the results filename. AIDE's generation family follows which checkpoint was
+    used (--model-arg checkpoint=...): progan is a GAN, sd14 is a diffusion
+    model, and genimage (a mixed generator dataset) keeps its own label. The
+    differing suffix also keeps the three checkpoints' runs in separate CSVs."""
     if _DEFAULT_MODEL is None:
-        raise RuntimeError("Call load() before result_subdir().")
-    return f"aide_{_DEFAULT_MODEL.checkpoint_name}"
+        raise RuntimeError("Call load() before result_stem().")
+    family = {"progan": "GAN", "sd14": "DM"}.get(
+        _DEFAULT_MODEL.checkpoint_name, _DEFAULT_MODEL.checkpoint_name
+    )
+    return f"aide_{family}"

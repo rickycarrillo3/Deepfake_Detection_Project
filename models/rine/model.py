@@ -79,11 +79,12 @@ def predict(image_path: str) -> float:
     return float(probability.detach().cpu().numpy()[0][0])
 
 
-def result_subdir():
-    """Optional runner contract (see run.py): split results by which RINE
-    checkpoint (ncls) was used, since --model-arg ncls=... changes the
-    weights entirely and different checkpoints shouldn't overwrite each
-    other's CSVs."""
+def result_stem():
+    """Optional runner contract (see run.py): the '<model>_<family>' middle of
+    the results filename. RINE was trained on latent-diffusion data, so its
+    generation family is always DM; the ncls checkpoint (--model-arg ncls=...)
+    goes in the model slot (rineldm, rine1, rine2, rine4) so the four
+    checkpoints' runs don't overwrite each other's CSVs."""
     if _ncls is None:
-        raise RuntimeError("Call load() before result_subdir().")
-    return f"rine_{_ncls}"
+        raise RuntimeError("Call load() before result_stem().")
+    return f"rine{_ncls}_DM"

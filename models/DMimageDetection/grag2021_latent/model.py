@@ -119,3 +119,10 @@ def predict(image_path: str) -> float:
     logit = float(np.mean(out))
 
     return float(torch.sigmoid(torch.tensor(logit)))
+
+
+def result_stem():
+    """Optional runner contract (see run.py): the '<model>_<family>' middle of
+    the results filename. This DMImageDetection checkpoint was trained on
+    latent-diffusion (Stable Diffusion) images."""
+    return "grag2021_latent_DM"

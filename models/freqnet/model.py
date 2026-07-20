@@ -65,3 +65,9 @@ def predict(image_path):
     if _DEFAULT_MODEL is None:
         raise RuntimeError("Call load() before predict().")
     return _DEFAULT_MODEL.predict(image_path)
+
+
+def result_stem():
+    """Optional runner contract (see run.py): the '<model>_<family>' middle of
+    the results filename. FreqNet was trained on GAN-generated images."""
+    return "freqnet_GAN"

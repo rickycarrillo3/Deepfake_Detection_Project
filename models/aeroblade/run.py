@@ -12,10 +12,15 @@ individual file gets its own). So this groups iter_dataset()'s
 model.predict_batch(shard_dir) once per shard.
 
 Writes:
-    results/aeroblade/<dataset_name>.csv           (filepath, score, label,
-                                                      + one raw-distance
-                                                      column per AE)
-    results/aeroblade/<dataset_name>_summary.csv    (avg per-image time)
+    results/<dataset_name>_aeroblade_predictions.csv   (filepath, score, label,
+                                                          + one raw-distance
+                                                          column per AE)
+
+Timing is printed to the console only, never to a CSV (see CLAUDE.md).
+
+AEROBLADE has no generation-family suffix (unlike the run.py-driven detectors),
+per the naming convention: it is a reconstruction-distance method, not trained
+on a specific generator family.
 """
 
 import argparse
@@ -36,7 +41,7 @@ from metrics import print_run_summary  # noqa: E402
 
 import model as aeroblade_model  # noqa: E402
 
-RESULTS_DIR = os.path.join(_REPO_ROOT, "results", "aeroblade")
+RESULTS_DIR = os.path.join(_REPO_ROOT, "results")
 
 
 def run(dataset_name: str):
@@ -90,23 +95,17 @@ def run(dataset_name: str):
     os.makedirs(RESULTS_DIR, exist_ok=True)
 
     df = pd.DataFrame(results)
-    results_csv = os.path.join(RESULTS_DIR, f"{dataset_name}.csv")
+    results_csv = os.path.join(RESULTS_DIR, f"{dataset_name}_aeroblade_predictions.csv")
     df.to_csv(results_csv, index=False)
 
+    # Timing stays console-only (see CLAUDE.md): the models time themselves too
+    # differently to record comparable durations in a CSV, so no _summary.csv.
     avg_time = total_time / total_images
-    summary_csv = os.path.join(RESULTS_DIR, f"{dataset_name}_summary.csv")
-    pd.DataFrame([{
-        "dataset": dataset_name,
-        "total_images": total_images,
-        "avg_seconds_per_image": avg_time,
-    }]).to_csv(summary_csv, index=False)
-
     print(
         f"\nFinished\n\n"
         f"Total images: {total_images}\n"
         f"Average processing time per image: {avg_time:.4f} seconds\n\n"
-        f"CSV saved as {results_csv}\n"
-        f"Summary saved as {summary_csv}"
+        f"CSV saved as {results_csv}"
     )
     # total_time sums the predict_batch calls only, so it excludes model loading
     # and the shard grouping — the same span run.py times for every other model.
