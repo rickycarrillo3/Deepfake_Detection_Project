@@ -11,7 +11,12 @@ model you are running:
     models/freqnet/venv/bin/python run.py --model freqnet --dataset ffhq_test
 
 Writes:
-    results/<dataset>_<model>_<family>_predictions.csv  (filepath, score, label)
+    results/<dataset>_<model>_<family>_predictions.csv
+        (filepath, score, "Predicted label", resize)
+
+where "Predicted label" is the score thresholded to 0/1 at metrics.THRESHOLD.
+The ground-truth label (0 for ffhq datasets, 1 otherwise) is not written to the
+CSV; it is used only to score accuracy on the console.
 
 where <family> is the generation family the detector was trained on (GAN/DM).
 A model.py may optionally define a module-level `result_stem()` function, called
@@ -27,6 +32,19 @@ never written to a CSV: the models time themselves differently (some not at
 all), so durations are not comparable across models and should not be recorded
 as if they were. The time sums the model's predict() calls only — not weight
 loading, and not this runner's dataset walking or CSV writing.
+
+--resize N (optional) standardizes the input across models for a controlled,
+apples-to-apples comparison. When set, this runner writes a losslessly-resized
+N×N PNG copy of each image to a temp dir and hands that path to the model's
+predict() — so the same NxN input reaches every model *before* its own
+per-model preprocessing runs, without editing any model.py. Left off (the
+default), each model sees the image at its native resolution and applies only
+its own built-in resizing. The resize is deliberately excluded from the timed
+span (it is this runner's bookkeeping, like walking the dataset), and every
+output CSV records which setting produced it in a `resize` column ("NxN" when
+--resize was used this run, else "none"). Note the resampling is fixed to
+bicubic here so the standardization itself is identical across models; a
+model's own downstream resize (e.g. freqnet's 256) still runs on top.
 
 --all runs every model in MODELS (and every known variant of a model, e.g.
 co-spy's train_dataset=progan / sd-v1_4, or aide's three checkpoints — see
@@ -87,6 +105,7 @@ import os
 import shutil
 import subprocess
 import sys
+import tempfile
 import time
 from itertools import groupby
 
@@ -98,7 +117,7 @@ if REPO_ROOT not in sys.path:
     sys.path.insert(0, REPO_ROOT)
 
 from loaders.dataset import iter_dataset, rel_to_dataset  # noqa: E402
-from metrics import print_run_summary  # noqa: E402
+from metrics import THRESHOLD, print_run_summary  # noqa: E402
 
 # Model name -> directory holding its model.py. The name also appears in each
 # results CSV filename (results/<dataset>_<model>_<family>_predictions.csv).
@@ -338,10 +357,34 @@ def _safe_rmtree(path, label):
         )
 
 
-def run(model_name, dataset_name, limit=None, force_label=None, model_kwargs=None):
+def _resized_copy(image_path, size, dest_path):
+    """Write an RGB, size×size PNG copy of image_path to dest_path, returning it.
+
+    Used only when --resize is set, to feed every model the identical NxN input
+    before its own preprocessing. PNG is lossless (no re-compression artifacts a
+    frequency detector would react to) and PIL is imported lazily so runs without
+    --resize keep this runner's pandas+tqdm-only footprint. Resampling is fixed to
+    bicubic so the standardization is the same for all models."""
+    from PIL import Image  # every model venv ships Pillow; import only when needed
+
+    with Image.open(image_path) as img:
+        img = img.convert("RGB").resize((size, size), Image.Resampling.BICUBIC)
+        img.save(dest_path, format="PNG")
+    return dest_path
+
+
+def run(model_name, dataset_name, limit=None, force_label=None, model_kwargs=None, resize=None):
     model_dir = os.path.join(REPO_ROOT, MODELS[model_name])
     module = load_model_module(model_name, model_dir)
     module.load(**(model_kwargs or {}))
+
+    # When --resize is set, each image is re-encoded into this scratch dir and the
+    # copy (not the original) is scored. One reused path is enough — scoring is
+    # single-threaded and sequential, so each image overwrites the last. Cleaned up
+    # below once scoring is done. "none" when off, "<N>x<N>" when on, recorded per row.
+    resize_tag = "none" if resize is None else f"{resize}x{resize}"
+    tmp_dir = tempfile.mkdtemp(prefix="dd_resize_") if resize is not None else None
+    resized_path = os.path.join(tmp_dir, "resized_input.png") if tmp_dir else None
 
     rows = []
     num_skipped = 0
@@ -373,24 +416,43 @@ def run(model_name, dataset_name, limit=None, force_label=None, model_kwargs=Non
             desc=f"{model_name}/{dataset_name} {os.path.basename(shard_dir)}",
             unit="img",
         ):
-            start = time.perf_counter()
             try:
-                score = module.predict(image_path)
+                # Standardize the input first when --resize is set. Done outside the
+                # timed span below: it is this runner's bookkeeping, not model
+                # inference, so it must not be billed to the model (same reasoning as
+                # dataset walking and CSV writing).
+                score_path = image_path
+                if resize is not None:
+                    score_path = _resized_copy(image_path, resize, resized_path)
+
+                start = time.perf_counter()
+                score = module.predict(score_path)
+                # Only successful calls are added: a skipped image contributes no row,
+                # so its partial work would pad the time without padding what it is over.
+                elapsed += time.perf_counter() - start
             except Exception as e:
                 print(f"Skipping {image_path}: {e}")
                 num_skipped += 1
                 continue
-            # Only successful calls are added: a skipped image contributes no row, so
-            # its partial work would pad the time without padding what it is over.
-            elapsed += time.perf_counter() - start
 
+            # `label` is the ground truth (0 for ffhq datasets, 1 otherwise — see
+            # loaders.label_for_dataset; --force-label overrides it). It is kept on
+            # the row for metric computation only and is NOT written to the CSV. The
+            # CSV instead carries `Predicted label`: the score thresholded to 0/1 at
+            # metrics.THRESHOLD, the same cutoff print_run_summary scores accuracy
+            # against, so the discrete column and the reported accuracy cannot drift.
             rows.append(
                 {
                     "filepath": rel_to_dataset(image_path, dataset_name),
                     "score": round(float(score), 4),
                     "label": int(force_label if force_label is not None else label),
+                    "Predicted label": int(float(score) >= THRESHOLD),
+                    "resize": resize_tag,
                 }
             )
+
+    if tmp_dir is not None:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
 
     if not rows:
         print(f"No images scored for dataset '{dataset_name}' — nothing to write.")
@@ -401,7 +463,9 @@ def run(model_name, dataset_name, limit=None, force_label=None, model_kwargs=Non
 
     stem = _result_stem(module, model_name)
     results_csv = os.path.join(results_dir, f"{dataset_name}_{stem}_predictions.csv")
-    pd.DataFrame(rows, columns=["filepath", "score", "label"]).to_csv(results_csv, index=False)
+    pd.DataFrame(rows, columns=["filepath", "score", "Predicted label", "resize"]).to_csv(
+        results_csv, index=False
+    )
 
     print(f"Wrote {len(rows)} rows to {results_csv}")
     if num_skipped:
@@ -563,6 +627,14 @@ def main():
         help="passed through to the model's load(), e.g. --model-arg train_dataset=sd-v1_4",
     )
     parser.add_argument(
+        "--resize",
+        type=int,
+        metavar="N",
+        help="standardize input: feed every model an NxN (bicubic) copy of each image "
+        "before its own preprocessing, for a controlled comparison. Recorded in the "
+        "output CSV's 'resize' column. Off by default (native resolution).",
+    )
+    parser.add_argument(
         "--all",
         action="store_true",
         help="run every model (and known variant) against --dataset, then delete each "
@@ -618,12 +690,16 @@ def main():
     if args.model not in MODELS:
         parser.error(f"unknown model '{args.model}'. Available: {', '.join(sorted(MODELS))}")
 
+    if args.resize is not None and args.resize <= 0:
+        parser.error(f"--resize must be a positive integer, got {args.resize}")
+
     run(
         args.model,
         args.dataset,
         limit=args.limit,
         force_label=args.force_label,
         model_kwargs=parse_model_args(args.model_arg),
+        resize=args.resize,
     )
 
 
