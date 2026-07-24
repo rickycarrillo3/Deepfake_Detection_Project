@@ -39,8 +39,14 @@ class AIDEModel:
       class 1 -> fake / AI-generated-like
     """
 
-    def __init__(self, device=None, checkpoint=None, checkpoint_path=None):
+    def __init__(self, device=None, checkpoint=None, checkpoint_path=None, dct_device=None):
         self.device = torch.device(device or ("cuda" if torch.cuda.is_available() else "cpu"))
+        # AIDE's DCT/noise patch selection is a plain nn.Module, so it runs wherever
+        # its parameters live. It defaults to the main device (a large win: it is
+        # per-image work over the *native-resolution* image, see _preprocess).
+        # dct_device=cpu restores the original CPU behaviour, which is the reference
+        # side of ab_dct_device.py.
+        self.dct_device = torch.device(dct_device) if dct_device else self.device
         self.checkpoint_name = checkpoint or DEFAULT_CHECKPOINT
 
         if checkpoint_path is not None:
@@ -93,7 +99,7 @@ class AIDEModel:
         from models import AIDE as AIDE_module  # type: ignore
         from data.dct import DCT_base_Rec_Module  # type: ignore
 
-        self.dct = DCT_base_Rec_Module(output=AIDE_IMAGE_SIZE)
+        self.dct = DCT_base_Rec_Module(output=AIDE_IMAGE_SIZE).to(self.dct_device).eval()
 
         # Same construction used in the uploaded Colab notebook.
         self.model = AIDE_module.AIDE(resnet_path=None, convnext_path=None)
@@ -139,23 +145,31 @@ class AIDEModel:
             img = img.convert("RGB")
             img_tensor = self.to_tensor(img)  # [3, H, W], values in [0, 1]
 
-        # AIDE's DCT/noise feature extraction. This is CPU-heavy.
-        x_minmin, x_maxmax, x_minmin1, x_maxmax1 = self.dct(img_tensor)
+        # no_grad rather than inference_mode: the returned tensor is later reshaped
+        # by predict() outside this block, and view ops on inference tensors raise.
+        with torch.no_grad():
+            # AIDE's DCT/noise feature extraction, and the dominant per-image cost:
+            # nn.Unfold runs over the *native-resolution* image (the 256x256 resize
+            # below happens after it), so a 1024x1024 input is ~4k 32x32 patch
+            # matmuls plus 6 filter passes. Run it on self.dct_device.
+            img_tensor = img_tensor.to(self.dct_device, non_blocking=True)
+            x_minmin, x_maxmax, x_minmin1, x_maxmax1 = self.dct(img_tensor)
 
-        # Same stack as the uploaded Colab:
-        # 1. DCT/noise low-rank patch
-        # 2. DCT/noise high-rank patch
-        # 3. second low-rank patch
-        # 4. second high-rank patch
-        # 5. resized/normalized RGB image tensor
-        x_0 = self.aide_resize_norm(img_tensor)
-        x_minmin = self.aide_resize_norm(x_minmin)
-        x_maxmax = self.aide_resize_norm(x_maxmax)
-        x_minmin1 = self.aide_resize_norm(x_minmin1)
-        x_maxmax1 = self.aide_resize_norm(x_maxmax1)
+            # Same stack as the uploaded Colab:
+            # 1. DCT/noise low-rank patch
+            # 2. DCT/noise high-rank patch
+            # 3. second low-rank patch
+            # 4. second high-rank patch
+            # 5. resized/normalized RGB image tensor
+            x_0 = self.aide_resize_norm(img_tensor)
+            x_minmin = self.aide_resize_norm(x_minmin)
+            x_maxmax = self.aide_resize_norm(x_maxmax)
+            x_minmin1 = self.aide_resize_norm(x_minmin1)
+            x_maxmax1 = self.aide_resize_norm(x_maxmax1)
 
-        x = torch.stack([x_minmin, x_maxmax, x_minmin1, x_maxmax1, x_0], dim=0)
-        return x
+            x = torch.stack([x_minmin, x_maxmax, x_minmin1, x_maxmax1, x_0], dim=0)
+
+        return x.to(self.device, non_blocking=True)
 
     def predict(self, image_path):
         x = self._preprocess(image_path).unsqueeze(0).to(self.device, non_blocking=True)
@@ -179,15 +193,24 @@ class AIDEModel:
 _DEFAULT_MODEL = None
 
 
-def load(device=None, checkpoint=None, checkpoint_path=None):
+def load(device=None, checkpoint=None, checkpoint_path=None, dct_device=None):
     """Module-level contract: load weights and return a ready AIDEModel.
 
     checkpoint: one of "genimage" (default), "progan", "sd14" — selects which
     of AIDE's shipped detector checkpoints to use, e.g. via
     --model-arg checkpoint=progan.
+
+    dct_device: where to run the DCT/noise patch extraction. Defaults to the
+    main device; --model-arg dct_device=cpu restores the old CPU-only behaviour
+    (much slower — see ab_dct_device.py).
     """
     global _DEFAULT_MODEL
-    _DEFAULT_MODEL = AIDEModel(device=device, checkpoint=checkpoint, checkpoint_path=checkpoint_path).load()
+    _DEFAULT_MODEL = AIDEModel(
+        device=device,
+        checkpoint=checkpoint,
+        checkpoint_path=checkpoint_path,
+        dct_device=dct_device,
+    ).load()
     return _DEFAULT_MODEL
 
 

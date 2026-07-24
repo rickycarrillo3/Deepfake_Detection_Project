@@ -20,11 +20,23 @@ resolution and pay for it in proportion to image size.
 
 | Model | Preprocessing before the net | Effective input |
 |---|---|---|
-| **aide** | `Resize((256,256))` + normalize (`models/aide/model.py:48`) | 256×256 |
+| **aide** | `Resize((256,256))` + normalize (`models/aide/model.py`) — but see the caveat below | 256×256 *into the net* |
 | **freqnet** | `Resize((256,256))` + ToTensor (`models/freqnet/model.py:20`) | 256×256 |
 | **grag2021** (standalone, GANimageDetection) | `Resize(256, BILINEAR)` + normalize (`models/grag2021/model.py:23`) | short side 256 |
 | **co-spy** | `Resize(loadSize)` → `CenterCrop(cropSize)`; sizes 256–384 (semantic/fusion 384, artifact 256→224) | ≤384 |
 | **rine** | `CenterCrop(224)` — **no resize**, crops a 224 window (`models/rine/rine/src/utils.py:41`) | 224×224 |
+
+**Caveat on `aide`:** the 256×256 bound describes only what reaches the
+*network*. Before that, `DCT_base_Rec_Module` runs over the image at **native
+resolution** — `nn.Unfold` with a 32×32 window at stride 16, then a 32×32 DCT
+matmul per patch and six filter passes, to pick the highest/lowest-frequency
+patches. That stage scales with pixel count exactly like the "slow group" below,
+so aide is bounded-input for the *net* but native-resolution for its
+*preprocessing*. It also means aide is genuinely sensitive to input resolution
+in a way the rest of this table's first group is not: `--resize` changes which
+patches get selected, not just how the frame is resampled. It used to run on the
+CPU regardless of the main device; it now follows the main device (override with
+`--model-arg dct_device=cpu`, and see `ab_dct_device.py`).
 
 `rine` is a slightly different case: it does not *downscale*, it **crops** a
 224×224 patch out of the native image and discards the rest. Cost is fixed and

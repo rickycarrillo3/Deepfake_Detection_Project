@@ -6,6 +6,28 @@ if [ ! -d "AIDE" ]; then
   git clone https://github.com/shilinyan99/AIDE.git AIDE
 fi
 
+# ---------------------------------------------------------------------------
+# Silence upstream's "Creating a tensor from a list of numpy.ndarrays is
+# extremely slow" UserWarning at AIDE/models/AIDE.py:22. This is a one-time
+# cost at model construction (30 5x5 SRM filters, ~750 floats in HPF.__init__),
+# NOT a per-image cost — the patch removes the noisy warning, it does not speed
+# up inference. Idempotent: skipped if already applied.
+# ---------------------------------------------------------------------------
+if grep -q 'torch.Tensor(all_hpf_list_5x5)' AIDE/models/AIDE.py 2>/dev/null; then
+  echo "Patching AIDE/models/AIDE.py to build the SRM filter bank via np.stack..."
+  python3 - <<'PY'
+from pathlib import Path
+
+path = Path("AIDE/models/AIDE.py")
+src = path.read_text()
+src = src.replace(
+    "torch.Tensor(all_hpf_list_5x5)",
+    "torch.from_numpy(np.stack(all_hpf_list_5x5)).float()",
+)
+path.write_text(src)
+PY
+fi
+
 # Interpreter used to build the venv. Override on clusters where the system
 # python3 is old, e.g. after `module load python/3.12.12`:
 #   PYTHON=python3.12 ./setup.sh
