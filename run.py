@@ -1,4 +1,4 @@
-"""Shared runner for every detection model in models/.
+"""Shared runner for every detection model in models/ and baselines/.
 
 Each model exposes the contract documented in CLAUDE.md — module-level
 `load()` and `predict(image_path) -> score` in its `model.py` — so one runner
@@ -13,6 +13,16 @@ model you are running:
 Writes:
     results/<dataset>_<model>_<family>_predictions.csv
         (filepath, score, "Predicted label", resize)
+
+Detectors registered under baselines/ rather than models/ are reproductions of
+the TrueFake paper's own evaluated detectors. They use the identical model.py
+contract and this same runner; their CSVs are simply written with a "baseline_"
+filename prefix —
+
+    results/baseline_<dataset>_<model>_<family>_predictions.csv
+
+— so paper-reproduction numbers stay distinguishable at a glance from our own
+benchmark numbers in the same flat results/ directory.
 
 where "Predicted label" is the score thresholded to 0/1 at metrics.THRESHOLD.
 The ground-truth label (0 for ffhq datasets, 1 otherwise) is not written to the
@@ -124,6 +134,12 @@ from metrics import THRESHOLD, print_run_summary  # noqa: E402
 # Listed explicitly rather than discovered: the vendored upstream clones inside
 # each model directory contain their own model.py files that would be picked up
 # by a filesystem walk.
+#
+# Entries under baselines/ are the TrueFake paper's own detectors, re-run on our
+# datasets to reproduce its numbers. They follow the identical model.py contract
+# and are driven by this same runner; the only difference is that their results
+# CSVs get a "baseline_" filename prefix so reproduction runs are never mistaken
+# for our own benchmark runs (see BASELINE_PREFIX / _result_prefix below).
 MODELS = {
     "freqnet": "models/freqnet",
     "grag2021": "models/grag2021",
@@ -133,7 +149,15 @@ MODELS = {
     "cnndetection": "models/cnndetection",
     "grag2021_latent": "models/DMimageDetection/grag2021_latent",
     "grag2021_progan": "models/DMimageDetection/grag2021_progan",
+    "r50_e2p": "baselines/r50_e2p",
 }
+
+# Directory prefix that marks a paper-reproduction detector, and the filename
+# prefix its results get. Derived from where the model.py lives rather than kept
+# as a second hand-maintained list, so a model cannot end up in baselines/ but
+# writing un-prefixed CSVs (or vice versa).
+BASELINES_DIR = "baselines/"
+BASELINE_PREFIX = "baseline_"
 
 # AEROBLADE scores a whole shard per call (predict_batch) and emits extra
 # per-autoencoder distance columns, so it keeps its own runner. --all skips it
@@ -249,6 +273,16 @@ def _result_stem(module, model_name):
     if override is None:
         return model_name
     return override()
+
+
+def _result_prefix(model_name):
+    """"baseline_" for detectors reproduced from the TrueFake paper, "" for ours.
+
+    Keyed off the model's registered directory (baselines/ vs models/) so the two
+    cannot disagree. This is the whole difference between a baseline run and a
+    normal one as far as this runner is concerned — everything else, the model.py
+    contract included, is identical."""
+    return BASELINE_PREFIX if MODELS[model_name].startswith(BASELINES_DIR) else ""
 
 
 def _find_model_python(model_name, model_dir):
@@ -462,7 +496,8 @@ def run(model_name, dataset_name, limit=None, force_label=None, model_kwargs=Non
     os.makedirs(results_dir, exist_ok=True)
 
     stem = _result_stem(module, model_name)
-    results_csv = os.path.join(results_dir, f"{dataset_name}_{stem}_predictions.csv")
+    prefix = _result_prefix(model_name)
+    results_csv = os.path.join(results_dir, f"{prefix}{dataset_name}_{stem}_predictions.csv")
     pd.DataFrame(rows, columns=["filepath", "score", "Predicted label", "resize"]).to_csv(
         results_csv, index=False
     )

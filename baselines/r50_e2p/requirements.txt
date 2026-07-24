@@ -1,0 +1,15 @@
+# Upstream pins these exactly in detector/environment.yml (a conda env with
+# linux CUDA builds). Kept as floors rather than pins so this venv also builds on
+# macOS/CPU for smoke tests; torchvision >= 0.22 is what supplies transforms.v2,
+# which model.py uses to reproduce upstream's test transform.
+torch>=2.7.0
+torchvision>=0.22.0
+numpy>=2.2
+pillow>=11.2
+
+# run.py itself needs these two under whichever venv it is invoked with.
+pandas
+tqdm
+
+# Fetches the pretrained checkpoint from Google Drive in setup.sh.
+gdown

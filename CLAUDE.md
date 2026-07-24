@@ -4,9 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project status
 
-Nine detectors are implemented under `models/`, driven by the shared top-level `run.py`. Each
-subdirectory's README documents the contract for code that lives there — read it before
-implementing anything in that directory.
+Nine detectors are implemented under `models/`, plus one paper-reproduction detector under
+`baselines/`, all driven by the shared top-level `run.py`. Each subdirectory's README documents
+the contract for code that lives there — read it before implementing anything in that directory.
 
 ## Purpose
 
@@ -17,8 +17,8 @@ ensembling / mixture of experts).
 ## Architecture
 
 Data flows: `data/` (raw image shards) → `loaders/` (yield `(image_path, label)` pairs) →
-`models/<model_name>/` (score each image) →
-`results/<dataset_name>_<model_name>_<generation_family>_predictions.csv`.
+`models/<model_name>/` or `baselines/<model_name>/` (score each image) →
+`results/[baseline_]<dataset_name>_<model_name>_<generation_family>_predictions.csv`.
 
 - **`run.py`** (repo root) — the single runner for every model. There is deliberately **no
   per-model `run.py`**: they were near-identical copies that drifted apart and had to be fixed
@@ -67,9 +67,28 @@ Data flows: `data/` (raw image shards) → `loaders/` (yield `(image_path, label
   `grag2021_progan`) sharing one venv and weights download, so model directories and detectors are
   not 1:1.
 
-- **`results/<dataset_name>_<model_name>_<generation_family>_predictions.csv`** — all results
-  live in one flat `results/` directory; the filename carries the dataset, model, and the
-  generation family the detector was trained on (`GAN`/`DM`). The `<model>_<family>` middle comes
+- **`baselines/<model_name>/`** — detectors from the TrueFake paper itself
+  (<https://arxiv.org/abs/2504.20658>), re-run on our shards to reproduce its published numbers.
+  Structurally identical to `models/<model_name>/` in every respect — same layout, same
+  `load()`/`predict()` contract, same `MODELS` registry in `run.py`, same isolated venv per
+  directory. They are separated only so a paper reproduction is never mistaken for one of our own
+  benchmark runs: `run.py` writes their CSVs with a `baseline_` filename prefix, keyed off the
+  registry path starting with `baselines/` (see `_result_prefix()`), so the prefix cannot drift
+  from where the code lives.
+
+  Currently just `r50_e2p` (the paper's proposed R50-E2P — a frozen `nodown` ResNet50 feeding
+  learned Gaussian prototypes). It is the only one of the paper's six detectors whose weights the
+  authors publish; the other five (R50-ND, MISLNet, NPR, CLIP-D, P2G) were trained with each
+  original paper's own pipeline and no TrueFake-trained checkpoints are distributed. Beware that
+  the paper's **R50-ND is Gragnaniello et al. 2021**, already present as `models/grag2021` — but
+  from the original authors' checkpoints, so it is *not* a like-for-like reproduction of the
+  paper's R50-ND column. See `baselines/README.md`.
+
+- **`results/[baseline_]<dataset_name>_<model_name>_<generation_family>_predictions.csv`** — all
+  results live in one flat `results/` directory; the filename carries the dataset, model, and the
+  generation family the detector was trained on (`GAN`/`DM`), behind an optional leading
+  `baseline_` marking a detector registered under `baselines/` rather than `models/`. The
+  `<model>_<family>` middle comes
   from each model.py's optional module-level `result_stem()` (see `run.py`); models without it fall
   back to just `<model_name>` (no family). For checkpoint-varying detectors the stem also encodes
   the checkpoint so runs don't collide: co-spy's family follows `train_dataset` (progan→GAN,

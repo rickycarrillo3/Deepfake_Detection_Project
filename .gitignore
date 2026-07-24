@@ -27,11 +27,19 @@
 models/*/venv/
 models/*/.venv/
 models/*/env/
+baselines/*/venv/
+baselines/*/.venv/
+baselines/*/env/
 
 # Vendored clones of each model's upstream GitHub repo
 models/co-spy/CO-SPY/
 models/grag2021/GANimageDetection/
 models/freqnet/FreqNet-DeepfakeDetection/
+baselines/r50_e2p/TrueFake-IJCNN25/
+
+# Downloaded checkpoints (best.pt is caught by *.pt above; this keeps the empty
+# dir out too)
+baselines/*/weights/
 
 # Python
 __pycache__/
