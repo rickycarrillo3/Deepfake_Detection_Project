@@ -1,0 +1,8 @@
+# AEROBLADE itself is installed as an editable package from the vendored
+# repo (`pip install -e ./aeroblade`), which pulls in its own pinned deps
+# (torch, diffusers, transformers, lpips, etc. — see aeroblade/requirements.txt).
+# Tested by upstream on Python 3.10.
+#
+# This file only lists what run.py needs on top of that.
+pandas
+setuptools<81

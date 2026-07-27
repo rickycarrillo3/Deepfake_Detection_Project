@@ -1,0 +1,6 @@
+# torch / torchvision are intentionally omitted — install separately, matched to local CUDA.
+# Also install models/freqnet/FreqNet-DeepfakeDetection/requirements.txt for the repo's own deps.
+numpy
+pillow
+pandas
+tqdm

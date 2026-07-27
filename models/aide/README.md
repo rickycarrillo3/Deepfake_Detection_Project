@@ -7,7 +7,7 @@ This implementation follows the repository contract:
 
 - `load()` loads the model/checkpoint and prepares inference.
 - `predict(image_path) -> score` returns a fake-probability score in `[0, 1]`.
-- `run.py` writes `results/aide/<dataset_name>.csv` with exactly:
+- The shared top-level `run.py` writes `results/aide/<dataset_name>.csv` with exactly:
 
 ```csv
 filepath,score,label
@@ -58,7 +58,8 @@ export AIDE_WEIGHTS_PATH=/absolute/path/to/your_checkpoint.pth
 or pass it directly:
 
 ```bash
-python models/aide/run.py --dataset flux_faces --checkpoint /absolute/path/to/your_checkpoint.pth
+models/aide/venv/bin/python run.py --model aide --dataset flux_faces \
+  --model-arg checkpoint_path=/absolute/path/to/your_checkpoint.pth
 ```
 
 ## Model convention
@@ -94,13 +95,13 @@ print(score)
 Full dataset run:
 
 ```bash
-python models/aide/run.py --dataset flux_faces --force-label 1
+models/aide/venv/bin/python run.py --model aide --dataset flux_faces --force-label 1
 ```
 
 Quick smoke test:
 
 ```bash
-python models/aide/run.py --dataset flux_faces --force-label 1 --limit 10
+models/aide/venv/bin/python run.py --model aide --dataset flux_faces --force-label 1 --limit 10
 ```
 
 The main output CSV will be:
@@ -115,13 +116,7 @@ with only these columns:
 filepath,score,label
 ```
 
-The runner also writes a timing summary:
-
-```text
-results/aide/flux_faces_summary.csv
-```
-
-with run metadata such as number of images, total seconds, and average seconds per image.
+No timing summary is written — see `results/README.md` for why.
 
 ## Notes
 

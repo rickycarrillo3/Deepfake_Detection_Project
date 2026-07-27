@@ -1,0 +1,12 @@
+# Installed against Python 3.9 in the original Colab notebook.
+# torch/torchvision pulled from the cu118 wheel index; see README.md.
+torch==2.2.0 
+torchvision==0.17.0
+numpy==1.26.4
+scipy==1.11.4 
+scikit-learn==1.3.2
+pandas
+Pillow
+gdown
+# plus everything in rine/requirements.txt (vendored repo's own deps,
+# e.g. CLIP / timm — install after cloning, see README.md)

@@ -55,5 +55,29 @@ class Grag2021Model:
                 logit = self.model(x).flatten()[0]
 
         logit = float(logit.detach().float().cpu())
-        # Model convention: negative logit means fake-like. Convert to fake-probability score.
-        return float(1 / (1 + np.exp(logit)))
+        # Model convention: positive logit means fake-like. Convert to fake-probability score.
+        return float(1 / (1 + np.exp(-logit)))
+
+
+_DEFAULT_MODEL = None
+
+
+def load(**kwargs):
+    """Module-level contract: load weights and return a ready Grag2021Model."""
+    global _DEFAULT_MODEL
+    _DEFAULT_MODEL = Grag2021Model(**kwargs)
+    _DEFAULT_MODEL.load()
+    return _DEFAULT_MODEL
+
+
+def predict(image_path):
+    """Module-level contract: predict fake-probability for one image path."""
+    if _DEFAULT_MODEL is None:
+        raise RuntimeError("Call load() before predict().")
+    return _DEFAULT_MODEL.predict(image_path)
+
+
+def result_stem():
+    """Optional runner contract (see run.py): the '<model>_<family>' middle of
+    the results filename. Grag2021 was trained on GAN-generated images."""
+    return "grag2021_GAN"
