@@ -1,3 +1,4 @@
+import contextlib
 import os
 import sys
 from pathlib import Path
@@ -25,6 +26,42 @@ CHECKPOINT_FILES = {
 DEFAULT_CHECKPOINT = "genimage"
 
 AIDE_IMAGE_SIZE = 256
+
+
+@contextlib.contextmanager
+def full_precision_matmul(device):
+    """Temporarily force true fp32 matmuls (no TF32) on CUDA.
+
+    load() enables TF32 globally, which is the right call for the network — it is
+    a large speedup and the logits barely move. It is the wrong call for the DCT
+    stage. That stage ends in a torch.sort over per-patch scores and selects a
+    *single* patch by rank, so precision loss is not averaged away: it either
+    changes nothing or swaps the ranking and feeds the network an entirely
+    different 32x32 region. TF32 keeps 10 mantissa bits against fp32's 23, a
+    perturbation ~1e-3 rather than the ~1e-7 of mere reduction-order differences,
+    which is more than enough to reorder near-tied patches.
+
+    Scoped rather than global so the network keeps TF32 and its speedup.
+    """
+    if device.type != "cuda":
+        yield
+        return
+
+    prev_allow = torch.backends.cuda.matmul.allow_tf32
+    try:
+        prev_precision = torch.get_float32_matmul_precision()
+    except AttributeError:  # older torch without the precision API
+        prev_precision = None
+
+    torch.backends.cuda.matmul.allow_tf32 = False
+    if prev_precision is not None:
+        torch.set_float32_matmul_precision("highest")
+    try:
+        yield
+    finally:
+        torch.backends.cuda.matmul.allow_tf32 = prev_allow
+        if prev_precision is not None:
+            torch.set_float32_matmul_precision(prev_precision)
 
 
 class AIDEModel:
@@ -153,7 +190,8 @@ class AIDEModel:
             # below happens after it), so a 1024x1024 input is ~4k 32x32 patch
             # matmuls plus 6 filter passes. Run it on self.dct_device.
             img_tensor = img_tensor.to(self.dct_device, non_blocking=True)
-            x_minmin, x_maxmax, x_minmin1, x_maxmax1 = self.dct(img_tensor)
+            with full_precision_matmul(self.dct_device):
+                x_minmin, x_maxmax, x_minmin1, x_maxmax1 = self.dct(img_tensor)
 
             # Same stack as the uploaded Colab:
             # 1. DCT/noise low-rank patch
