@@ -87,4 +87,6 @@ def result_stem():
     checkpoints' runs don't overwrite each other's CSVs."""
     if _ncls is None:
         raise RuntimeError("Call load() before result_stem().")
-    return f"rine{_ncls}_DM"
+    if _ncls != "ldm":
+        return f"rine{_ncls}_GAN"
+    return f"rine_DM"

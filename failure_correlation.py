@@ -2,29 +2,45 @@
 """
 failure_correlation.py
 
-Reads every detector CSV in results/, groups them by dataset
-(flux, ffhq, stylegan-0.5, ...), computes model failure
-correlations, and writes plots + CSVs into
+Reads every prediction CSV directly in results/ (flat — no per-model
+subfolders), named:
+
+    <dataset>_<stem>_predictions.csv
+
+where <stem> is whatever a model's result_stem() returned (e.g. "aide_DM",
+"co-spy_GAN") or, for a model that doesn't define result_stem(), just its
+plain model name (e.g. "cnndetection", "grag2021_latent"). <stem> is used
+directly as the column/model identifier below — it's already authoritative
+(it's literally what model.py named the file), so there's no separate
+lookup table to keep in sync or accidentally let go stale.
+
+Groups CSVs by dataset, computes model failure correlations, and writes
+plots + CSVs into
 
 results/plots/<dataset>/
 
-Datasets here are a MIX of real (label=0) and fake (label=1) images, so every
-metric below is computed relative to the ground-truth label column in each
-CSV, not blindly derived from the score alone:
+Datasets here are a MIX of real and fake DATASETS (not a mix within a single
+CSV) — ffhq is entirely real, every other dataset is entirely fake (see
+REAL_DATASETS below). The CSVs themselves have no label column at all
+(run.py deliberately doesn't write one), so every metric below derives label
+from which dataset a file came from, not from a per-row value:
 
-  error_<model>     = abs(label - score)         -- 0 = perfect, 1 = maximally wrong
-  correct_<model>    = (delta_vector == label)     -- did this model's decision match the label
-  incorrect_<model>  = 1 - correct_<model>         -- used for "failure correlation" (do models
-                                                       fail on the same images), NOT raw delta_vector,
-                                                       since delta_vector=1 is a success on a fake
-                                                       image but a failure on a real one
-  oracle accuracy    = fraction of images where AT LEAST ONE model was correct
+  delta_vector_<model> = the CSV's own "Predicted label" column, trusted
+                          as-is rather than re-thresholding score ourselves
+  error_<model>         = abs(label - score)       -- 0 = perfect, 1 = maximally wrong
+  correct_<model>       = (delta_vector == label)   -- did this model's decision match the label
+  incorrect_<model>     = 1 - correct_<model>       -- used for "failure correlation" (do models
+                                                        fail on the same images), NOT raw delta_vector,
+                                                        since delta_vector=1 is a success on a fake
+                                                        image but a failure on a real one
+  oracle accuracy       = fraction of images where AT LEAST ONE model was correct
 
 delta_vector_<model> (raw score >= threshold) is still written to the
 combined CSV as a diagnostic, but is no longer what correlations or oracle
 accuracy are computed from.
 """
 
+import re
 from pathlib import Path
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -36,33 +52,24 @@ import pandas as pd
 RESULTS_DIR = Path("results")
 OUTPUT_DIR = RESULTS_DIR / "plots"
 
-DELTA_THRESHOLD = 0.5
+# Dataset display-names (after "_faces" is stripped, e.g. "ffhq" not
+# "ffhq_faces") that are all-REAL. Everything else is treated as all-FAKE.
+# The CSVs have no label column at all (run.py deliberately doesn't write
+# one — see its docstring), so this is the only source of ground truth here.
+REAL_DATASETS = {"ffhq"}
 
-TRAINING_TYPE = {
-    "aide_genimage": "MIX",
-    "aide_progan": "GAN",
-    "aide_sd14": "DM",
-    "cnndetection": "GAN",
-    "co-spy_progan": "GAN",
-    "co-spy_sd-v1_4": "DM",
-    "freqnet": "GAN",
-    "grag2021": "GAN",
-    "grag2021_latent": "DM",
-    "grag2021_progan": "GAN",
-    "rine_1": "GAN1",
-    "rine_2": "GAN2",
-    "rine_4": "GAN4",
-    "rine_ldm": "DM",
-    # NOTE: bare "rine" deliberately excluded — it collided with rine_ldm's
-    # pretty name ("rine (DM)" for both), and being alphabetically first,
-    # silently won every "duplicate model" skip in build_combined(), so
-    # rine_ldm's actual results were being discarded. If results/rine/ is
-    # stale (pre-checkpoint-variant), delete it on disk too.
-}
+# Every dataset filename observed so far ends in "_faces" (ffhq_faces,
+# flux_faces, stylegan-0.5_faces, ...), so that's used as the default split
+# marker between <dataset> and <stem> in DATASET_stem_predictions.csv — both
+# halves can themselves contain underscores, so a plain split-on-underscore
+# can't tell them apart reliably. If you add a dataset whose name does NOT
+# end in "_faces", add its exact <dataset> string here (checked first, before
+# the "_faces" fallback).
+KNOWN_DATASETS = []
 
-# Benchmark accuracy to compare each dataset's models against (now plotted
-# against per-model ACCURACY, not raw positive rate — comparing an accuracy
-# figure to positive rate was only valid for an all-fake dataset).
+# dataset_name (with "_faces" stripped, e.g. "flux" not "flux_faces") ->
+# benchmark accuracy to draw as a reference line on that dataset's accuracy
+# chart. None / absent -> no line drawn.
 BENCHMARK_LINES = {
     "flux": 0.98,
     "ffhq": None,
@@ -70,28 +77,24 @@ BENCHMARK_LINES = {
     "stylegan-0.7": None,
 }
 
-###############################################################################
-# Model naming
-###############################################################################
+_FILENAME_RE = re.compile(r"^(?P<dataset>.+_faces)_(?P<stem>.+)_predictions\.csv$")
 
 
-def pretty_model_name(folder):
-    if folder in {"grag2021_progan", "grag2021_latent"}:
-        base = "DMimageDetection"
+def parse_result_filename(fname):
+    """'flux_faces_aide_DM_predictions.csv' -> ('flux_faces', 'aide_DM').
+    Returns (None, None) if fname doesn't match any known pattern (e.g.
+    aeroblade's *_summary.csv, or results/summary.csv at the top level —
+    both deliberately not per-image prediction files)."""
+    for ds in sorted(KNOWN_DATASETS, key=len, reverse=True):
+        prefix = ds + "_"
+        suffix = "_predictions.csv"
+        if fname.startswith(prefix) and fname.endswith(suffix):
+            return ds, fname[len(prefix):-len(suffix)]
 
-    elif folder in {"co-spy_progan", "co-spy_sd-v1_4"}:
-        base = "co-spy"
-
-    elif folder in {"rine_1", "rine_2", "rine_4", "rine_ldm"}:
-        base = "rine"
-
-    elif folder in {"aide_genimage", "aide_progan", "aide_sd14"}:
-        base = "aide"
-
-    else:
-        base = folder
-
-    return f"{base} ({TRAINING_TYPE[folder]})"
+    m = _FILENAME_RE.match(fname)
+    if m:
+        return m.group("dataset"), m.group("stem")
+    return None, None
 
 
 ###############################################################################
@@ -101,27 +104,22 @@ def pretty_model_name(folder):
 
 def discover_datasets():
     datasets = {}
-    skipped_folders = set()
+    unparsed = []
 
-    for csv in RESULTS_DIR.rglob("*.csv"):
+    for csv in sorted(RESULTS_DIR.glob("*.csv")):  # flat: only results/ itself, not results/plots/...
 
-        if csv.name.endswith("_summary.csv"):
+        raw_dataset, stem = parse_result_filename(csv.name)
+        if raw_dataset is None:
+            unparsed.append(csv.name)
             continue
 
-        folder = csv.parent.name
+        display_dataset = raw_dataset.replace("_faces", "")
+        datasets.setdefault(display_dataset, []).append((stem, csv))
 
-        if folder not in TRAINING_TYPE:
-            skipped_folders.add(folder)
-            continue
-
-        dataset = csv.stem.replace("_faces", "")
-
-        datasets.setdefault(dataset, []).append((pretty_model_name(folder), folder, csv))
-
-    if skipped_folders:
+    if unparsed:
         print(
-            "Skipping folder(s) not listed in TRAINING_TYPE (add them there if "
-            f"they should be included): {', '.join(sorted(skipped_folders))}\n"
+            "Skipping file(s) that don't match <dataset>_<stem>_predictions.csv "
+            f"(add to KNOWN_DATASETS if one of these should be included): {', '.join(unparsed)}\n"
         )
 
     return datasets
@@ -132,60 +130,64 @@ def discover_datasets():
 ###############################################################################
 
 
-def build_combined(entries):
+def build_combined(display_dataset, entries):
+
+    label_value = 0 if display_dataset in REAL_DATASETS else 1
 
     frames = []
-    label_frames = []
+    resize_settings = set()
 
     used = set()
 
-    for model_name, folder, csv in sorted(entries):
+    for stem, csv in sorted(entries):
 
-        if model_name in used:
-            print(f"Duplicate model '{model_name}', skipping.")
+        if stem in used:
+            print(f"Duplicate model '{stem}' (from {csv.name}), skipping.")
             continue
 
-        used.add(model_name)
+        used.add(stem)
 
         df = pd.read_csv(csv).set_index("filepath").sort_index()
 
-        if "label" not in df.columns:
-            print(f"WARNING: {csv} has no 'label' column — skipping {model_name} (can't score correctness without it).")
+        missing = {"score", "Predicted label"} - set(df.columns)
+        if missing:
+            print(f"WARNING: {csv} is missing column(s) {missing} — skipping {stem}.")
             continue
 
+        if "resize" in df.columns:
+            resize_settings.update(df["resize"].unique())
+
         score = df["score"].copy()
-        label = df["label"].astype(int)
+        delta = df["Predicted label"].astype(int)   # already thresholded by run.py — trust it, don't re-derive
+        label = label_value                          # dataset-level, not per-row: this dataset is all-real or all-fake
 
         # Grag outputs are inverted
-        #        if folder == "grag2021":
+        #        if stem.startswith("grag2021"):
         #            score = 1 - score
 
         sub = pd.DataFrame(index=df.index)
 
-        sub[f"score_{model_name}"] = score
-        delta = (score >= DELTA_THRESHOLD).astype(int)
-        sub[f"delta_vector_{model_name}"] = delta                       # diagnostic only, not used for correlation below
-        sub[f"error_{model_name}"] = (label - score).abs()               # label-aware: 0=perfect, 1=maximally wrong
+        sub[f"score_{stem}"] = score
+        sub[f"delta_vector_{stem}"] = delta                        # diagnostic only, not used for correlation below
+        sub[f"error_{stem}"] = (label - score).abs()                # label-aware: 0=perfect, 1=maximally wrong
         correct = (delta == label).astype(int)
-        sub[f"correct_{model_name}"] = correct
-        sub[f"incorrect_{model_name}"] = 1 - correct                     # used for failure correlation
+        sub[f"correct_{stem}"] = correct
+        sub[f"incorrect_{stem}"] = 1 - correct                      # used for failure correlation
 
         frames.append(sub)
-        label_frames.append(label.rename(model_name))
 
     if not frames:
         raise ValueError("No usable models for this dataset (see warnings above).")
 
     combined = pd.concat(frames, axis=1, join="inner").sort_index()
+    combined["label"] = label_value
 
-    # Sanity-check that every model's CSV agrees on the ground-truth label for
-    # the same image — they should, since label is a property of the image,
-    # not the model. Flag rather than silently trust it if they don't.
-    labels_df = pd.concat(label_frames, axis=1, join="inner").sort_index()
-    if not labels_df.eq(labels_df.iloc[:, 0], axis=0).all().all():
-        mismatched = (~labels_df.eq(labels_df.iloc[:, 0], axis=0).all(axis=1)).sum()
-        print(f"WARNING: {mismatched} image(s) have disagreeing labels across model CSVs for this dataset — using the first model's label for those.")
-    combined["label"] = labels_df.iloc[:, 0]
+    if len(resize_settings) > 1:
+        print(
+            f"WARNING: models being combined for {display_dataset} used different --resize "
+            f"settings ({sorted(resize_settings)}) — this is comparing apples to oranges "
+            f"unless that's intentional."
+        )
 
     # Remove PatchForensics
     combined = combined.drop(
@@ -391,7 +393,7 @@ def main():
         outdir = OUTPUT_DIR / dataset
         outdir.mkdir(parents=True, exist_ok=True)
 
-        combined = build_combined(entries)
+        combined = build_combined(dataset, entries)
 
         print(f"{combined.shape[0]} images")
         print(f"{len(entries)} models")
