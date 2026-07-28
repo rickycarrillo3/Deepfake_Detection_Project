@@ -46,6 +46,18 @@ output CSV records which setting produced it in a `resize` column ("NxN" when
 bicubic here so the standardization itself is identical across models; a
 model's own downstream resize (e.g. freqnet's 256) still runs on top.
 
+--baselines is --all restricted to the TrueFake baselines (the six tf-*
+entries under baselines/), for sweeping just that set against one dataset:
+
+    python3 run.py --baselines --dataset ffhq_test
+
+Everything below about --all applies to it unchanged — same per-model venv
+re-exec, same cleanup, same --keep-repo/--keep-venv/--dry-run. The one
+difference is that end-of-run cleanup of *shared* clones and venvs is limited
+to the group that actually ran, so sweeping the baselines never deletes a
+models/ venv this invocation never touched. The group is derived from the
+MODELS registry by directory (see BASELINES below), not maintained separately.
+
 --all runs every model in MODELS (and every known variant of a model, e.g.
 co-spy's train_dataset=progan / sd-v1_4, or aide's three checkpoints — see
 VARIANT_ARGS below) against one dataset, then deletes that model's cloned
@@ -147,6 +159,12 @@ MODELS = {
     "tf-clipd": "baselines/CLIP-D",
     "tf-p2g": "baselines/P2G",
 }
+
+# The TrueFake baselines, as a sweepable group (--baselines). Derived from
+# MODELS by directory rather than listed separately, so adding a baseline to
+# the registry above is enough — there is no second list here to fall out of
+# sync with it.
+BASELINES = frozenset(name for name, path in MODELS.items() if path.startswith("baselines/"))
 
 # AEROBLADE scores a whole shard per call (predict_batch) and emits extra
 # per-autoencoder distance columns, so it keeps its own runner. --all skips it
@@ -498,10 +516,26 @@ def run(model_name, dataset_name, limit=None, force_label=None, model_kwargs=Non
     print_run_summary(rows, elapsed)
 
 
-def run_all(dataset_name, limit=None, force_label=None, keep_repo=False, keep_venv=False, dry_run=False):
-    this_script = os.path.abspath(__file__)
+def run_all(
+    dataset_name,
+    limit=None,
+    force_label=None,
+    keep_repo=False,
+    keep_venv=False,
+    dry_run=False,
+    only=None,
+):
+    """Sweep every model in MODELS against one dataset.
 
-    for model_name in sorted(MODELS):
+    `only` restricts the sweep to a subset of MODELS names (--baselines passes
+    BASELINES). Cleanup of shared clones/venvs at the end is restricted to the
+    same subset, so sweeping just the baselines never deletes a models/ venv
+    that was not part of this run.
+    """
+    this_script = os.path.abspath(__file__)
+    selected = sorted(MODELS if only is None else only)
+
+    for model_name in selected:
         model_dir = os.path.join(REPO_ROOT, MODELS[model_name])
         python_bin = _find_model_python(model_name, model_dir)
         
@@ -590,12 +624,17 @@ def run_all(dataset_name, limit=None, force_label=None, keep_repo=False, keep_ve
                     print(f"[cleanup] {model_name}: removing venv {venv_dir} (re-run its setup.sh to rebuild it)")
                     _safe_rmtree(venv_dir, model_name)
 
-    # Shared clones/venvs are handled last and only once, now that every model
-    # in MODELS has already had its turn in the loop above — see
-    # SHARED_CLONE_ROOTS / SHARED_VENV_ROOTS.
+    # Shared clones/venvs are handled last and only once, now that every
+    # selected model has already had its turn in the loop above — see
+    # SHARED_CLONE_ROOTS / SHARED_VENV_ROOTS. A shared resource is only removed
+    # if this sweep actually ran something that depends on it: with --baselines
+    # (or any other subset) the models/ entries never ran, and deleting their
+    # clone or venv would break a directory this invocation never touched.
     for shared_root, dependent_models in SHARED_CLONE_ROOTS.items():
         if keep_repo:
             break
+        if not any(name in selected for name in dependent_models):
+            continue
         shared_path = os.path.join(REPO_ROOT, shared_root)
         if not os.path.isdir(shared_path):
             print(f"[cleanup] shared root {shared_path} not present — nothing to remove.")
@@ -616,6 +655,8 @@ def run_all(dataset_name, limit=None, force_label=None, keep_repo=False, keep_ve
     for shared_root, dependent_models in SHARED_VENV_ROOTS.items():
         if keep_venv:
             break
+        if not any(name in selected for name in dependent_models):
+            continue
         shared_path = os.path.join(REPO_ROOT, shared_root)
         if not os.path.isdir(shared_path):
             print(f"[cleanup] shared venv {shared_path} not present — nothing to remove.")
@@ -666,19 +707,25 @@ def main():
         "model's cloned upstream repo to reclaim disk space; see module docstring",
     )
     parser.add_argument(
+        "--baselines",
+        action="store_true",
+        help="like --all but only the TrueFake baselines (" + ", ".join(sorted(BASELINES)) + ")",
+    )
+    parser.add_argument(
         "--keep-repo",
         action="store_true",
-        help="with --all, skip deleting cloned repos after each model finishes",
+        help="with --all/--baselines, skip deleting cloned repos after each model finishes",
     )
     parser.add_argument(
         "--keep-venv",
         action="store_true",
-        help="with --all, skip deleting venvs after each model finishes",
+        help="with --all/--baselines, skip deleting venvs after each model finishes",
     )
     parser.add_argument(
         "--dry-run",
         action="store_true",
-        help="with --all, print what would run and what would be deleted, without doing either",
+        help="with --all/--baselines, print what would run and what would be deleted, "
+        "without doing either",
     )
     parser.add_argument("--list", action="store_true", help="list available models and exit")
     args = parser.parse_args()
@@ -690,11 +737,15 @@ def main():
             print(f"{name:16} {os.path.dirname(runner)}  (bespoke runner: {runner})")
         return
 
-    if args.all:
+    if args.all and args.baselines:
+        parser.error("--all and --baselines are alternatives; pass only one")
+
+    if args.all or args.baselines:
+        flag = "--all" if args.all else "--baselines"
         if args.model:
-            parser.error("--all runs every model; don't pass --model with it")
+            parser.error(f"{flag} runs a whole group of models; don't pass --model with it")
         if not args.dataset:
-            parser.error("--dataset is required with --all")
+            parser.error(f"--dataset is required with {flag}")
         run_all(
             args.dataset,
             limit=args.limit,
@@ -702,11 +753,14 @@ def main():
             keep_repo=args.keep_repo,
             keep_venv=args.keep_venv,
             dry_run=args.dry_run,
+            only=BASELINES if args.baselines else None,
         )
         return
 
     if not args.model or not args.dataset:
-        parser.error("--model and --dataset are required (or use --all, or --list)")
+        parser.error(
+            "--model and --dataset are required (or use --all, --baselines, or --list)"
+        )
 
     if args.model in BESPOKE:
         parser.error(
