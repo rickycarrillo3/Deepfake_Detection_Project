@@ -4,9 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project status
 
-Nine detectors are implemented under `models/`, driven by the shared top-level `run.py`. Each
-subdirectory's README documents the contract for code that lives there — read it before
-implementing anything in that directory.
+Nine detectors are implemented under `models/`, plus six TrueFake baselines under `baselines/`,
+all driven by the shared top-level `run.py`. Each subdirectory's README documents the contract
+for code that lives there — read it before implementing anything in that directory.
 
 ## Purpose
 
@@ -66,6 +66,21 @@ Data flows: `data/` (raw image shards) → `loaders/` (yield `(image_path, label
   Note `models/DMimageDetection/` holds *two* detectors in subdirectories (`grag2021_latent`,
   `grag2021_progan`) sharing one venv and weights download, so model directories and detectors are
   not 1:1.
+
+- **`baselines/<Detector>/`** — the six detectors benchmarked by the TrueFake paper itself
+  (Dell'Anna et al., IJCNN 2025), using checkpoints supplied by its authors. Same `model.py`
+  contract and same per-directory venv isolation as `models/`, so `run.py` drives them
+  identically; registered under `tf-` prefixed names (`tf-npr`, `tf-r50e2p`, …). They sit in
+  their own tree because they are one coherent set — all six were retrained by those authors on
+  the *same* split — and that shared provenance is what makes their columns comparable to each
+  other. It also makes them **not** interchangeable with same-architecture checkpoints under
+  `models/`: `baselines/R50_nodown` and `models/DMimageDetection/` are the same network with
+  different weights, hence the prefix on every registry name and output CSV.
+
+  Two of them (`R50_TF`, `MISLNet`) vendor no upstream clone — their architectures are
+  transcribed into `baselines/tf_networks.py`. `run.py`'s `NO_CLONE_MODELS` set records this so
+  `--all` does not read a deliberately absent clone as a broken setup. See `baselines/README.md`,
+  which also documents which parts of MISLNet are reconstructed rather than sourced.
 
 - **`results/<dataset_name>_<model_name>_<generation_family>_predictions.csv`** — all results
   live in one flat `results/` directory; the filename carries the dataset, model, and the

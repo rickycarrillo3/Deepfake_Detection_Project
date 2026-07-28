@@ -133,6 +133,19 @@ MODELS = {
     "cnndetection": "models/cnndetection",
     "grag2021_latent": "models/DMimageDetection/grag2021_latent",
     "grag2021_progan": "models/DMimageDetection/grag2021_progan",
+    # TrueFake baselines (baselines/, see its README). Same model.py contract
+    # as models/, so the runner treats them identically; they live in their own
+    # top-level directory because they are one coherent set — the six detectors
+    # of Dell'Anna et al., IJCNN 2025, all retrained by those authors on the
+    # same StyleGAN2+SDXL training split. The tf- prefix keeps them distinct
+    # from the original-author checkpoints under models/, which share
+    # architectures with some of them but not weights.
+    "tf-r50nd": "baselines/R50_nodown",
+    "tf-r50e2p": "baselines/R50_TF",
+    "tf-npr": "baselines/NPR",
+    "tf-mislnet": "baselines/MISLNet",
+    "tf-clipd": "baselines/CLIP-D",
+    "tf-p2g": "baselines/P2G",
 }
 
 # AEROBLADE scores a whole shard per call (predict_batch) and emits extra
@@ -180,6 +193,16 @@ VARIANT_ARGS = {
 VENV_OVERRIDE = {
     "grag2021_latent": "models/DMimageDetection/venv",
     "grag2021_progan": "models/DMimageDetection/venv",
+}
+
+# Models whose model.py imports no vendored upstream clone, because their
+# architecture is transcribed into the repo instead (baselines/tf_networks.py).
+# Without this, _repo_present() below would report "no clone found" forever and
+# --all would re-run their setup.sh on every pass. Being listed here means
+# "this model is not supposed to have a clone", not "its clone is missing".
+NO_CLONE_MODELS = {
+    "tf-r50e2p",
+    "tf-mislnet",
 }
 
 # clone directory -> every model name that depends on it. Cleaned up once, at
@@ -298,6 +321,8 @@ def _repo_present(model_name, model_dir):
     """Whether this model's cloned upstream repo currently exists. For models
     with a shared clone (SHARED_CLONE_ROOTS), checks the shared path instead
     of model_dir, since model_dir itself never contains their .git."""
+    if model_name in NO_CLONE_MODELS:
+        return True
     for shared_root, dependents in SHARED_CLONE_ROOTS.items():
         if model_name in dependents:
             return os.path.isdir(os.path.join(REPO_ROOT, shared_root))

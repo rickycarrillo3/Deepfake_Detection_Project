@@ -1,0 +1,7 @@
+# Dependencies for this baseline only — each baselines/ directory keeps its own
+# environment, matching the per-directory isolation used throughout models/.
+# torch / torchvision are installed by setup.sh so the CUDA wheel index can be
+# chosen per platform.
+pillow
+pandas
+tqdm

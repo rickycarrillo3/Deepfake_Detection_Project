@@ -8,6 +8,7 @@ ensembling / mixture of experts).
 
 - [`data/`](data/README.md) — evaluation image shards (git-ignored, uploaded incrementally)
 - [`models/`](models/README.md) — pretrained detectors under test, each with its own isolated environment
+- [`baselines/`](baselines/README.md) — the six detectors from the TrueFake paper, with checkpoints from its authors
 - [`loaders/`](loaders/README.md) — dataset loading code shared across model runs
 - [`results/`](results/README.md) — per-model, per-dataset CSV outputs
 
