@@ -79,11 +79,21 @@ class AIDEModel:
     def __init__(self, device=None, checkpoint=None, checkpoint_path=None, dct_device=None):
         self.device = torch.device(device or ("cuda" if torch.cuda.is_available() else "cpu"))
         # AIDE's DCT/noise patch selection is a plain nn.Module, so it runs wherever
-        # its parameters live. It defaults to the main device (a large win: it is
-        # per-image work over the *native-resolution* image, see _preprocess).
-        # dct_device=cpu restores the original CPU behaviour, which is the reference
-        # side of ab_dct_device.py.
-        self.dct_device = torch.device(dct_device) if dct_device else self.device
+        # its parameters live. Running it on the GPU is a large speedup — it is
+        # per-image work over the *native-resolution* image (see _preprocess) — but
+        # it is deliberately NOT the default.
+        #
+        # ab_dct_device.py on a real shard found 2 predicted-label flips in 20
+        # images (10%) between CPU and GPU. That stage ends in a torch.sort that
+        # selects a single patch by rank, so a tiny numeric difference either
+        # changes nothing or feeds the network an entirely different 32x32 region.
+        # A 10% device-dependent label rate is disqualifying for a benchmark whose
+        # output is cross-model correlation: it would be measuring the hardware.
+        # CPU is also the regime every existing aide result was produced under.
+        #
+        # dct_device=cuda opts into the faster path. Re-run ab_dct_device.py
+        # (--limit 100) before trusting it for anything that gets published.
+        self.dct_device = torch.device(dct_device) if dct_device else torch.device("cpu")
         self.checkpoint_name = checkpoint or DEFAULT_CHECKPOINT
 
         if checkpoint_path is not None:
@@ -238,9 +248,11 @@ def load(device=None, checkpoint=None, checkpoint_path=None, dct_device=None):
     of AIDE's shipped detector checkpoints to use, e.g. via
     --model-arg checkpoint=progan.
 
-    dct_device: where to run the DCT/noise patch extraction. Defaults to the
-    main device; --model-arg dct_device=cpu restores the old CPU-only behaviour
-    (much slower — see ab_dct_device.py).
+    dct_device: where to run the DCT/noise patch extraction. Defaults to "cpu",
+    which is both the original behaviour and the one every existing result was
+    produced under. --model-arg dct_device=cuda is much faster but changed 10%
+    of predicted labels in testing — see AIDEModel.__init__ and
+    ab_dct_device.py before using it.
     """
     global _DEFAULT_MODEL
     _DEFAULT_MODEL = AIDEModel(

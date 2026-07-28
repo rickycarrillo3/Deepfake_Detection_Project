@@ -3,18 +3,21 @@
 
 Why this exists
 ---------------
-`models/aide/model.py` builds `DCT_base_Rec_Module` and, before this change, left
-it on the CPU. That stage is not incidental: it runs `nn.Unfold` over the image
+`models/aide/model.py` runs `DCT_base_Rec_Module` on the CPU by default. That
+stage is not incidental: it runs `nn.Unfold` over the image
 at its **native resolution** (AIDE's 256x256 resize happens *after* it), so a
 1024x1024 input means thousands of 32x32 patch matmuls plus six filter passes,
 per image, on one core, inside run.py's timed span.
 
-Moving it to the GPU is a pure placement change, but it is not guaranteed to be
-bit-identical: the stage ranks patches with `torch.sort` on a summed float score
-(`AIDE/data/dct.py`), and CPU/GPU reduction orders differ in the last bits. On a
-tie or near-tie that can select a *different* patch, which changes the score. The
-point of this script is to measure whether that actually happens on real data,
-and what it costs, before trusting the speedup.
+Moving it to the GPU is a pure placement change, but it is not bit-identical: the
+stage ranks patches with `torch.sort` on a summed float score
+(`AIDE/data/dct.py`), and CPU/GPU results differ in the last bits. On a tie or
+near-tie that selects a *different* patch, which changes the score.
+
+This is not hypothetical — it is why the CPU default stands. A run on a real
+shard found **2 predicted-label flips in 20 images**, which is why aide keeps the
+slower CPU path rather than the speedup. Use this script to re-measure (at
+`--limit 100`, not 20) if you want to revisit that with better evidence.
 
 It scores each image twice with the same weights — once with the DCT on CPU
 (the reference / old behaviour), once on the main device — and reports the

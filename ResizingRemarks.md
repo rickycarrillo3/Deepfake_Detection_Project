@@ -34,9 +34,15 @@ patches. That stage scales with pixel count exactly like the "slow group" below,
 so aide is bounded-input for the *net* but native-resolution for its
 *preprocessing*. It also means aide is genuinely sensitive to input resolution
 in a way the rest of this table's first group is not: `--resize` changes which
-patches get selected, not just how the frame is resampled. It used to run on the
-CPU regardless of the main device; it now follows the main device (override with
-`--model-arg dct_device=cpu`, and see `ab_dct_device.py`).
+patches get selected, not just how the frame is resampled.
+
+This stage runs on the **CPU** even when the network is on a GPU, and that is a
+deliberate choice rather than an oversight. Moving it to the GPU is a large
+speedup, but `ab_dct_device.py` measured 2 predicted-label flips in 20 images
+between the two devices: the stage picks a single patch by rank via
+`torch.sort`, so a small numeric difference either changes nothing or selects a
+different region entirely. `--model-arg dct_device=cuda` opts in; re-measure
+before trusting it.
 
 `rine` is a slightly different case: it does not *downscale*, it **crops** a
 224×224 patch out of the native image and discards the rest. Cost is fixed and
