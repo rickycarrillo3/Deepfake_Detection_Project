@@ -193,16 +193,16 @@ VARIANT_ARGS = {
 VENV_OVERRIDE = {
     "grag2021_latent": "models/DMimageDetection/venv",
     "grag2021_progan": "models/DMimageDetection/venv",
-    # Five of the six TrueFake baselines share baselines/venv. Unlike the
-    # models/ directories — which are isolated because vendored upstream repos
-    # pin conflicting torch/tf versions — these five pin nothing that clashes,
-    # so five separate multi-GB torch installs would buy no isolation. tf-p2g
-    # is deliberately absent: it pins torch==2.1.0 and keeps its own venv.
-    "tf-r50nd": "baselines/venv",
-    "tf-r50e2p": "baselines/venv",
-    "tf-npr": "baselines/venv",
-    "tf-mislnet": "baselines/venv",
-    "tf-clipd": "baselines/venv",
+}
+
+# Models whose model.py imports no vendored upstream clone, because their
+# architecture is transcribed into the repo instead (baselines/tf_networks.py).
+# Without this, _repo_present() below would report "no clone found" forever and
+# --all would re-run their setup.sh on every pass. Being listed here means
+# "this model is not supposed to have a clone", not "its clone is missing".
+NO_CLONE_MODELS = {
+    "tf-r50e2p",
+    "tf-mislnet",
 }
 
 # clone directory -> every model name that depends on it. Cleaned up once, at
@@ -211,21 +211,6 @@ VENV_OVERRIDE = {
 # it mid-run would break whichever dependent model hadn't run yet.
 SHARED_CLONE_ROOTS = {
     "models/DMimageDetection/dmimagedetection": ["grag2021_latent", "grag2021_progan"],
-    # grip-unina's repo supplies two architectures: res50nodown (tf-r50nd) and
-    # the CLIP linear probe (tf-clipd). tf-r50e2p and tf-mislnet are listed
-    # too, but for a different reason: they need no clone at all (their
-    # architectures are transcribed in baselines/networks.py), so this entry
-    # stands in as "has baselines/setup.sh completed?" — without it their
-    # missing-clone check would be permanently false and re-run setup.sh on
-    # every --all pass. tf-npr is deliberately NOT here: it has a clone of its
-    # own inside baselines/NPR/, which the default per-model handling finds,
-    # removes and rebuilds correctly.
-    "baselines/ClipBased-SyntheticImageDetection": [
-        "tf-r50nd",
-        "tf-clipd",
-        "tf-r50e2p",
-        "tf-mislnet",
-    ],
 }
 
 # Mirrors SHARED_CLONE_ROOTS but for venvs shared across models (same
@@ -233,13 +218,6 @@ SHARED_CLONE_ROOTS = {
 # both grag2021_latent and grag2021_progan point at via VENV_OVERRIDE.
 SHARED_VENV_ROOTS = {
     "models/DMimageDetection/venv": ["grag2021_latent", "grag2021_progan"],
-    "baselines/venv": [
-        "tf-r50nd",
-        "tf-r50e2p",
-        "tf-npr",
-        "tf-mislnet",
-        "tf-clipd",
-    ],
 }
 
 # Directory names to never descend into while looking for a model's venv
@@ -343,6 +321,8 @@ def _repo_present(model_name, model_dir):
     """Whether this model's cloned upstream repo currently exists. For models
     with a shared clone (SHARED_CLONE_ROOTS), checks the shared path instead
     of model_dir, since model_dir itself never contains their .git."""
+    if model_name in NO_CLONE_MODELS:
+        return True
     for shared_root, dependents in SHARED_CLONE_ROOTS.items():
         if model_name in dependents:
             return os.path.isdir(os.path.join(REPO_ROOT, shared_root))

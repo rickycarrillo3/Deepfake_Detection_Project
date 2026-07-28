@@ -43,48 +43,60 @@ with; R50-E2P and R50-ND are the paper's names for them.
 baselines/
 ├── tf_networks.py           # architectures transcribed from the authors' code
 ├── verify_checkpoints.py    # acceptance test — every checkpoint must load strictly
-├── setup.sh                 # shared venv + vendored clones (all but P2G)
-├── requirements.txt
-├── venv/                    # shared by 5 of the 6 (git-ignored)
-├── ClipBased-SyntheticImageDetection/   # vendored, serves tf-r50nd + tf-clipd
-├── <Detector>/
-│   ├── model.py             # load() / predict() — the contract run.py calls
-│   └── best.pt              # author-supplied checkpoint (git-ignored)
-└── P2G/                     # own venv — pins torch==2.1.0
+└── <Detector>/
+    ├── model.py             # load() / predict() — the contract run.py calls
+    ├── setup.sh             # clones upstream (if needed), builds this venv
+    ├── requirements.txt
+    ├── venv/                # this baseline's own environment (git-ignored)
+    ├── best.pt              # author-supplied checkpoint (git-ignored)
+    └── <upstream clone>/    # only where the architecture is imported, not transcribed
 ```
+
+Every baseline owns its environment, matching the per-directory isolation used
+throughout `models/`. Two directories (`R50_TF`, `MISLNet`) have no upstream
+clone — their architectures are transcribed into `tf_networks.py`, since the
+code they came from is either bundled in the authors' repo or not public.
+`run.py` knows this via its `NO_CLONE_MODELS` set, so `--all` does not
+mistake a deliberately absent clone for a broken setup.
 
 `tf_networks.py` is named that, rather than `networks.py`, on purpose: two of
 the vendored clones each ship a top-level package called `networks`, and a
 `baselines/networks.py` would shadow them.
 
-## Running
+## Setup and running
+
+Each baseline is set up and invoked through its own venv:
 
 ```bash
-# shared venv (tf-r50nd, tf-r50e2p, tf-npr, tf-mislnet, tf-clipd)
-baselines/venv/bin/python run.py --model tf-npr --dataset ffhq_test
-
-# P2G has its own
-baselines/P2G/venv/bin/python run.py --model tf-p2g --dataset ffhq_test
+cd baselines/NPR && bash setup.sh
+baselines/NPR/venv/bin/python run.py --model tf-npr --dataset ffhq_test
 ```
 
-Setup:
-
-```bash
-cd baselines && bash setup.sh          # the five sharing a venv
-cd baselines/P2G && bash setup.sh      # P2G
-```
+| baseline | setup | run |
+|---|---|---|
+| `tf-r50e2p` | `cd baselines/R50_TF && bash setup.sh` | `baselines/R50_TF/venv/bin/python run.py --model tf-r50e2p ...` |
+| `tf-r50nd` | `cd baselines/R50_nodown && bash setup.sh` | `baselines/R50_nodown/venv/bin/python run.py --model tf-r50nd ...` |
+| `tf-npr` | `cd baselines/NPR && bash setup.sh` | `baselines/NPR/venv/bin/python run.py --model tf-npr ...` |
+| `tf-mislnet` | `cd baselines/MISLNet && bash setup.sh` | `baselines/MISLNet/venv/bin/python run.py --model tf-mislnet ...` |
+| `tf-clipd` | `cd baselines/CLIP-D && bash setup.sh` | `baselines/CLIP-D/venv/bin/python run.py --model tf-clipd ...` |
+| `tf-p2g` | `cd baselines/P2G && bash setup.sh` | `baselines/P2G/venv/bin/python run.py --model tf-p2g ...` |
 
 `setup.sh` does **not** fetch checkpoints — they were provided directly by the
 authors and are not publicly hosted. Drop each `best.pt` into its directory.
 
-## Environments
+## A note on P2G's interpreter
 
-Five of the six share `baselines/venv`. This departs from the strict
-per-directory isolation `models/` uses, and deliberately so: that rule exists
-because vendored upstream repos pin conflicting torch versions, and these five
-pin nothing that clashes — five separate multi-GB torch installs would buy no
-isolation. **P2G is the exception that proves it**: it pins `torch==2.1.0`, so
-it keeps its own venv, exactly as `models/` would.
+Five baselines build against current torch. **P2G pins `torch==2.1.0` and
+`Pillow==10.0.1`**, neither of which has wheels for recent Pythons — upstream
+tested on 3.9. Its `setup.sh` will fail on a Python 3.12+ default. Point it at
+an older interpreter:
+
+```bash
+cd baselines/P2G && PYTHON=python3.10 bash setup.sh
+```
+
+This is the clearest case for the per-directory isolation the repo already
+uses: P2G genuinely cannot share an environment with the others.
 
 ## Scores are logits upstream
 

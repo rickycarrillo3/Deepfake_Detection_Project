@@ -58,8 +58,7 @@ from torchvision.transforms import Resize, ToTensor
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 _MODEL_DIR = os.path.dirname(os.path.abspath(__file__))
-_BASELINES_DIR = os.path.dirname(_MODEL_DIR)
-_CLONE_DIR = os.path.join(_BASELINES_DIR, "ClipBased-SyntheticImageDetection")
+_CLONE_DIR = os.path.join(_MODEL_DIR, "ClipBased-SyntheticImageDetection")
 if _CLONE_DIR not in sys.path:
     sys.path.insert(0, _CLONE_DIR)
 

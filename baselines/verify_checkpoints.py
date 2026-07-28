@@ -43,8 +43,9 @@ CASES = [
 
 
 def _verify_one(subdir, hw):
-    """Load one baseline and run it forward once. Runs in its own process."""
+    """Load one baseline and score one image. Runs in its own process."""
     import importlib.util
+    import tempfile
 
     model_dir = os.path.join(BASELINES_DIR, subdir)
     sys.path.insert(0, model_dir)
@@ -55,22 +56,40 @@ def _verify_one(subdir, hw):
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
 
-    model = module.load()
+    module.load()
     print(f"strict load OK -> {module.result_stem()}")
 
-    model.eval()
-    with torch.no_grad():
-        out = model(torch.randn(1, 3, *hw).to(next(model.parameters()).device))
-    print(f"forward{hw} -> {tuple(out.shape)}")
+    # Score a real image file through predict(), rather than pushing a tensor
+    # through forward(). This exercises the actual contract run.py calls,
+    # including each baseline's own preprocessing — and it is the only smoke
+    # test that fits all six, since P2G's forward() takes a second argument
+    # (the conditioning labels) that the others have no analogue for.
+    from PIL import Image
+
+    with tempfile.TemporaryDirectory() as tmp:
+        path = os.path.join(tmp, "probe.png")
+        # Built through PIL's raw decoder rather than torch->numpy, so this
+        # harness needs no numpy of its own — P2G's venv pins numpy<2 for
+        # torch 2.1.0's C API, and the probe shouldn't care either way.
+        torch.manual_seed(0)
+        raw = bytes((torch.rand(hw[0] * hw[1] * 3) * 255).byte().tolist())
+        Image.frombytes("RGB", (hw[1], hw[0]), raw).save(path)
+
+        score = module.predict(path)
+
+    if not (isinstance(score, float) and 0.0 <= score <= 1.0):
+        raise ValueError(f"predict() must return a float in [0, 1], got {score!r}")
+    print(f"predict({hw[0]}x{hw[1]} probe) -> {score:.4f}")
 
 
-def main():
+def main(only=None):
     import subprocess
 
     failures = 0
     skipped = 0
+    cases = [c for c in CASES if not only or c[1] in only]
 
-    for label, subdir, hw in CASES:
+    for label, subdir, hw in cases:
         model_dir = os.path.join(BASELINES_DIR, subdir)
         weights = os.path.join(model_dir, "best.pt")
         model_py = os.path.join(model_dir, "model.py")
@@ -105,11 +124,15 @@ def main():
             failures += 1
 
     print()
-    print(f"{len(CASES) - failures - skipped} ok, {failures} failed, {skipped} skipped")
+    print(f"{len(cases) - failures - skipped} ok, {failures} failed, {skipped} skipped")
     return 1 if failures else 0
 
 
 if __name__ == "__main__":
+    # Optional positional args name which baselines to check, by directory.
+    # Needed because the environments are split: P2G's venv has no open_clip
+    # (so it cannot load CLIP-D) and the shared venv has no torch 2.1.0 pin.
+    # Each setup.sh therefore verifies only the baselines its own venv covers.
     if len(sys.argv) > 1 and sys.argv[1] == "--case":
         try:
             _verify_one(sys.argv[2], (int(sys.argv[3]), int(sys.argv[4])))
@@ -117,4 +140,4 @@ if __name__ == "__main__":
             traceback.print_exc()
             sys.exit(1)
         sys.exit(0)
-    sys.exit(main())
+    sys.exit(main(only=set(sys.argv[1:]) or None))
