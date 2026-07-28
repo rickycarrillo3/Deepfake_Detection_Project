@@ -1,0 +1,16 @@
+# Shared environment for the TrueFake baselines that have no conflicting pins:
+# NPR, MISLNet, R50_nodown, R50_TF, CLIP-D.
+#
+# torch / torchvision are installed by setup.sh, not listed here, so the CUDA
+# wheel index can be selected per platform.
+#
+# P2G is NOT covered by this file: it pins torch==2.1.0, so it keeps its own
+# venv (baselines/P2G/). See baselines/README.md.
+pillow
+pandas
+tqdm
+
+# CLIP-D only: open_clip backbone + the HF hub download of the CommonPool
+# ViT-L-14 weights.
+open_clip_torch
+huggingface-hub>=0.23.0

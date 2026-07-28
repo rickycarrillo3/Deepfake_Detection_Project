@@ -133,6 +133,19 @@ MODELS = {
     "cnndetection": "models/cnndetection",
     "grag2021_latent": "models/DMimageDetection/grag2021_latent",
     "grag2021_progan": "models/DMimageDetection/grag2021_progan",
+    # TrueFake baselines (baselines/, see its README). Same model.py contract
+    # as models/, so the runner treats them identically; they live in their own
+    # top-level directory because they are one coherent set — the six detectors
+    # of Dell'Anna et al., IJCNN 2025, all retrained by those authors on the
+    # same StyleGAN2+SDXL training split. The tf- prefix keeps them distinct
+    # from the original-author checkpoints under models/, which share
+    # architectures with some of them but not weights.
+    "tf-r50nd": "baselines/R50_nodown",
+    "tf-r50e2p": "baselines/R50_TF",
+    "tf-npr": "baselines/NPR",
+    "tf-mislnet": "baselines/MISLNet",
+    "tf-clipd": "baselines/CLIP-D",
+    "tf-p2g": "baselines/P2G",
 }
 
 # AEROBLADE scores a whole shard per call (predict_batch) and emits extra
@@ -180,6 +193,16 @@ VARIANT_ARGS = {
 VENV_OVERRIDE = {
     "grag2021_latent": "models/DMimageDetection/venv",
     "grag2021_progan": "models/DMimageDetection/venv",
+    # Five of the six TrueFake baselines share baselines/venv. Unlike the
+    # models/ directories — which are isolated because vendored upstream repos
+    # pin conflicting torch/tf versions — these five pin nothing that clashes,
+    # so five separate multi-GB torch installs would buy no isolation. tf-p2g
+    # is deliberately absent: it pins torch==2.1.0 and keeps its own venv.
+    "tf-r50nd": "baselines/venv",
+    "tf-r50e2p": "baselines/venv",
+    "tf-npr": "baselines/venv",
+    "tf-mislnet": "baselines/venv",
+    "tf-clipd": "baselines/venv",
 }
 
 # clone directory -> every model name that depends on it. Cleaned up once, at
@@ -188,6 +211,21 @@ VENV_OVERRIDE = {
 # it mid-run would break whichever dependent model hadn't run yet.
 SHARED_CLONE_ROOTS = {
     "models/DMimageDetection/dmimagedetection": ["grag2021_latent", "grag2021_progan"],
+    # grip-unina's repo supplies two architectures: res50nodown (tf-r50nd) and
+    # the CLIP linear probe (tf-clipd). tf-r50e2p and tf-mislnet are listed
+    # too, but for a different reason: they need no clone at all (their
+    # architectures are transcribed in baselines/networks.py), so this entry
+    # stands in as "has baselines/setup.sh completed?" — without it their
+    # missing-clone check would be permanently false and re-run setup.sh on
+    # every --all pass. tf-npr is deliberately NOT here: it has a clone of its
+    # own inside baselines/NPR/, which the default per-model handling finds,
+    # removes and rebuilds correctly.
+    "baselines/ClipBased-SyntheticImageDetection": [
+        "tf-r50nd",
+        "tf-clipd",
+        "tf-r50e2p",
+        "tf-mislnet",
+    ],
 }
 
 # Mirrors SHARED_CLONE_ROOTS but for venvs shared across models (same
@@ -195,6 +233,13 @@ SHARED_CLONE_ROOTS = {
 # both grag2021_latent and grag2021_progan point at via VENV_OVERRIDE.
 SHARED_VENV_ROOTS = {
     "models/DMimageDetection/venv": ["grag2021_latent", "grag2021_progan"],
+    "baselines/venv": [
+        "tf-r50nd",
+        "tf-r50e2p",
+        "tf-npr",
+        "tf-mislnet",
+        "tf-clipd",
+    ],
 }
 
 # Directory names to never descend into while looking for a model's venv

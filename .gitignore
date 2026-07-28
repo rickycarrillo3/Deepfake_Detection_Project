@@ -33,6 +33,17 @@ models/co-spy/CO-SPY/
 models/grag2021/GANimageDetection/
 models/freqnet/FreqNet-DeepfakeDetection/
 
+# TrueFake baselines (baselines/) — five share one venv, P2G keeps its own.
+baselines/venv/
+baselines/*/venv/
+baselines/*/.venv/
+
+# Vendored clones for the baselines. grip-unina's serves two of them
+# (tf-r50nd and tf-clipd), so it sits at the baselines/ top level.
+baselines/ClipBased-SyntheticImageDetection/
+baselines/NPR/NPR-DeepfakeDetection/
+baselines/P2G/Prompt2Guard/
+
 # Python
 __pycache__/
 *.pyc
