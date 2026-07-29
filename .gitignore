@@ -28,6 +28,17 @@ models/*/venv/
 models/*/.venv/
 models/*/env/
 
+# Trained-ensemble environments (gradient_boosting/setup.sh, neural_network/setup.sh).
+# Their fitted output lands in results/gradient_boosting/ and results/neural_network/,
+# already covered by the /results/** rule above; the *.pt rule also catches the MLP
+# checkpoint wherever it ends up.
+gradient_boosting/venv/
+gradient_boosting/.venv/
+gradient_boosting/env/
+neural_network/venv/
+neural_network/.venv/
+neural_network/env/
+
 # Vendored clones of each model's upstream GitHub repo
 models/co-spy/CO-SPY/
 models/grag2021/GANimageDetection/

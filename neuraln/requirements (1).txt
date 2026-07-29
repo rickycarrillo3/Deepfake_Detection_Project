@@ -1,0 +1,16 @@
+# Environment for the neural-network ensemble (neural_network/train.py).
+#
+# Isolated from the detectors for the same reason each model in models/ has its
+# own venv: nothing here should force a version alignment on any model's pinned
+# torch. Nothing in this folder touches an image — it reads the results/ CSVs —
+# so torch is only ever used on a few-hundred-parameter MLP and setup.sh
+# installs the CPU wheel. torchvision is not needed.
+#
+# scikit-learn is deliberately absent: AUROC is computed from ranks in
+# evaluation.py, so the only real dependency here is torch.
+#
+# --dry-run needs only numpy + pandas.
+
+numpy
+pandas
+torch
