@@ -37,7 +37,7 @@ if _REPO_ROOT not in sys.path:
     sys.path.insert(0, _REPO_ROOT)
 
 from loaders.dataset import iter_dataset, rel_to_dataset  # noqa: E402
-from metrics import print_run_summary  # noqa: E402
+from metrics import append_run_log, print_run_summary  # noqa: E402
 
 import model as aeroblade_model  # noqa: E402
 
@@ -90,7 +90,8 @@ def run(dataset_name: str):
 
     if total_images == 0:
         print(f"No images found for dataset '{dataset_name}' — nothing to write.")
-        return
+        # Returned so __main__ still logs the run; see run.py's equivalent.
+        return 0, total_time
 
     os.makedirs(RESULTS_DIR, exist_ok=True)
 
@@ -110,10 +111,26 @@ def run(dataset_name: str):
     # total_time sums the predict_batch calls only, so it excludes model loading
     # and the shard grouping — the same span run.py times for every other model.
     print_run_summary(results, total_time)
+    # len(results), not total_images: the log's n_images counts rows actually
+    # written, matching run.py, so images a shard returned no score for are
+    # excluded from both the same way.
+    return len(results), total_time
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run AEROBLADE over a dataset of shards.")
     parser.add_argument("dataset_name", help="Name of the dataset under data/, e.g. sd3_faces_shards")
     args = parser.parse_args()
-    run(args.dataset_name)
+    # Same run-log row as every other model, written through the shared helper so
+    # this runner's rows are indistinguishable from run.py's. "aeroblade" is the
+    # name it is known by in run.py's BESPOKE map.
+    _wall_start = time.perf_counter()
+    _n_images, _predict_seconds = run(args.dataset_name)
+    append_run_log(
+        _REPO_ROOT,
+        "aeroblade",
+        args.dataset_name,
+        _n_images,
+        _predict_seconds,
+        time.perf_counter() - _wall_start,
+    )

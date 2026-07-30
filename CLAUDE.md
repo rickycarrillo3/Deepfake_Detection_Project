@@ -36,6 +36,14 @@ Data flows: `data/` (raw image shards) → `loaders/` (yield `(image_path, label
   model-specific config travels (e.g. `--model-arg train_dataset=sd-v1_4` for co-spy) without the
   runner needing to know what it means. `--list` prints the registry.
 
+  Sweep flags run a group of models against one dataset, re-execing each under its own venv and
+  cleaning up its clone/venv afterwards: `--all` (everything in `MODELS`), `--baselines` (the six
+  `tf-*` entries, derived from `MODELS` by directory), and `--models a,b,c` (an arbitrary named
+  subset; repeatable). They are alternatives — pass at most one. All three go through
+  `run_all(only=...)`, so cleanup of *shared* clones and venvs is limited to the models that
+  actually ran and a subset sweep never deletes a directory it never touched. `--models` names are
+  validated up front, so a typo fails before the sweep starts rather than hours into it.
+
   **Exception:** `aeroblade` keeps its own `models/aeroblade/run.py`. It scores a whole shard per
   call via `predict_batch(shard_dir)` and emits extra per-autoencoder distance columns, so it does
   not fit the one-image-at-a-time contract.
@@ -107,11 +115,22 @@ Data flows: `data/` (raw image shards) → `loaders/` (yield `(image_path, label
   resize is done outside the timed span (it is runner bookkeeping, not model inference — see the
   timing note below), and `aeroblade`'s bespoke runner does not support it.
 
-  **No timing is recorded to a CSV and no `_summary.csv` is written.** The models time themselves
-  differently (some did not time at all before the runner was consolidated), so per-image or total
-  durations are not comparable across models and should not be written out as if they were. Images
-  that fail to score are skipped and counted to the console, not to a CSV. Do not reintroduce a
-  timing CSV without first making the measurement genuinely comparable across models.
+  **Timing goes to `results/run_log.csv`, never into a predictions CSV, and there is still no
+  `_summary.csv`.** Every run appends one row — `timestamp`, `model` (the `MODELS` registry name),
+  `dataset`, `n_images`, `predict_seconds`, `wall_seconds` — via `metrics.append_run_log()`, which
+  aeroblade's bespoke runner calls too so its runs land in the same log under `aeroblade`. A sweep
+  appends one row per model, since each model runs as its own `run.py --model ...` subprocess.
+  Images that fail to score are skipped and counted to the console; they are excluded from
+  `n_images` and from every CSV.
+
+  `predict_seconds` is the model's `predict()` calls summed alone; `wall_seconds` is the whole
+  invocation, weight loading included. Consolidating the runner is what made the former worth
+  recording: one piece of code now times that span identically for every model, where previously
+  each model timed itself or not at all. It is still only comparable between rows that shared
+  hardware, `--resize` setting and dataset — none of which the log records — so do not read the
+  file as a cross-model benchmark table without checking that. Keep durations out of the
+  predictions CSVs: their schema is strictly per-image, and the separate file is what stops a
+  run-level number from being read as a per-image column.
 
   At the end of a run, accuracy (thresholded at `0.5`) and inference time are printed **to the
   console** — see `metrics.py`, which both `run.py` and aeroblade's bespoke runner call so the
@@ -119,11 +138,13 @@ Data flows: `data/` (raw image shards) → `loaders/` (yield `(image_path, label
   summed on their own: each `predict()` is timed individually and added up (aeroblade likewise sums
   its `predict_batch()` calls), so it excludes one-off weight loading *and* the runner's own work —
   walking the dataset, building rows, writing the CSV. Keep any new timing inside that span only;
-  a timer wrapped around the scoring loop silently bills the runner's bookkeeping to the model.
-  These stay console-only for the reason above.
+  a timer wrapped around the scoring loop silently bills the runner's bookkeeping to the model —
+  that wider span is `wall_seconds`, which the run log already records separately.
 
   Results contents are **git-ignored** (only `.gitkeep` + `README.md` are tracked) — everything
   produced so far has been throwaway test output. Revisit this once real benchmark runs land.
+  `run_log.csv` is ignored with them: it records what one machine has run, and an append-only file
+  committed from several machines would conflict constantly.
 
 ## Conventions to preserve when implementing
 
