@@ -27,11 +27,18 @@ rine's ncls, aide's checkpoint) keeps those runs in separate CSVs now that all
 results share one flat results/ directory. Models that don't define it fall back
 to just "<model>" (no family).
 
-Accuracy and inference time are printed to the console at the end of a run, but
-never written to a CSV: the models time themselves differently (some not at
-all), so durations are not comparable across models and should not be recorded
-as if they were. The time sums the model's predict() calls only — not weight
-loading, and not this runner's dataset walking or CSV writing.
+Accuracy and inference time are printed to the console at the end of a run. The
+time sums the model's predict() calls only — not weight loading, and not this
+runner's dataset walking or CSV writing. Because that span is now measured here,
+by this one runner, it is measured the same way for every model.
+
+Every run also appends one row to results/run_log.csv (timestamp, model,
+dataset, n_images, predict_seconds, wall_seconds) — see metrics.append_run_log,
+which aeroblade's bespoke runner calls too, so its runs land in the same log.
+Timing stays out of the *predictions* CSVs, whose schema is per-image; the log
+is a separate file precisely so a duration is never mistaken for a per-image
+column. Note the log records neither hardware nor image dimensions, so rows are
+comparable to each other only when those matched.
 
 --resize N (optional) standardizes the input across models for a controlled,
 apples-to-apples comparison. When set, this runner writes a losslessly-resized
@@ -140,7 +147,7 @@ if REPO_ROOT not in sys.path:
     sys.path.insert(0, REPO_ROOT)
 
 from loaders.dataset import iter_dataset, rel_to_dataset  # noqa: E402
-from metrics import THRESHOLD, print_run_summary  # noqa: E402
+from metrics import THRESHOLD, append_run_log, print_run_summary  # noqa: E402
 
 # Model name -> directory holding its model.py. The name also appears in each
 # results CSV filename (results/<dataset>_<model>_<family>_predictions.csv).
@@ -531,7 +538,9 @@ def run(model_name, dataset_name, limit=None, force_label=None, model_kwargs=Non
 
     if not rows:
         print(f"No images scored for dataset '{dataset_name}' — nothing to write.")
-        return
+        # Still returns a (count, time) pair: main() logs the run either way, so a
+        # run that scored nothing is recorded as such rather than vanishing.
+        return 0, elapsed
 
     results_dir = os.path.join(REPO_ROOT, "results")
     os.makedirs(results_dir, exist_ok=True)
@@ -546,6 +555,7 @@ def run(model_name, dataset_name, limit=None, force_label=None, model_kwargs=Non
     if num_skipped:
         print(f"Skipped {num_skipped} image(s)")
     print_run_summary(rows, elapsed)
+    return len(rows), elapsed
 
 
 def run_all(
@@ -822,13 +832,25 @@ def main():
     if args.resize is not None and args.resize <= 0:
         parser.error(f"--resize must be a positive integer, got {args.resize}")
 
-    run(
+    # Wall clock spans the whole invocation — weight loading, scoring, CSV write
+    # — which is what makes it different from the predict-only sum run() returns.
+    # Both are logged; see metrics.append_run_log.
+    wall_start = time.perf_counter()
+    n_images, predict_seconds = run(
         args.model,
         args.dataset,
         limit=args.limit,
         force_label=args.force_label,
         model_kwargs=parse_model_args(args.model_arg),
         resize=args.resize,
+    )
+    append_run_log(
+        REPO_ROOT,
+        args.model,
+        args.dataset,
+        n_images,
+        predict_seconds,
+        time.perf_counter() - wall_start,
     )
 
 

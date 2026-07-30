@@ -40,17 +40,42 @@ The **ground-truth** label is deliberately *not* a column: it is recoverable fro
 name in the filename (contains `ffhq` → `0`/real, else → `1`/fake — see
 `loaders.label_for_dataset`) and is used only to score accuracy on the console.
 
-## Run timing
+## Run timing — `run_log.csv`
 
-None is recorded. The models time themselves differently (some did not time at all before the
-runner was consolidated), so per-image or total durations are not comparable across models and are
-deliberately not written out as if they were. Images that fail to score are skipped and counted to
-the console, not to a CSV.
+Every run appends one row to `results/run_log.csv`, the one file here that accumulates across runs
+rather than being rewritten by one:
 
-Do not reintroduce a timing CSV without first making the measurement genuinely comparable across
-models.
+| column            | type   | description                                                          |
+|-------------------|--------|----------------------------------------------------------------------|
+| `timestamp`       | string | ISO 8601, local time, seconds resolution                             |
+| `model`           | string | the `MODELS` registry name from `run.py` (e.g. `tf-npr`)             |
+| `dataset`         | string | `dataset_name` under `data/`                                         |
+| `n_images`        | int    | rows written to that run's predictions CSV (skipped images excluded) |
+| `predict_seconds` | float  | the model's `predict()` calls summed on their own                    |
+| `wall_seconds`    | float  | the whole invocation, weight loading and CSV writing included         |
+
+Written by `metrics.append_run_log()`, which aeroblade's bespoke runner calls too, so its runs
+appear in the same log under the name `aeroblade`. A sweep (`--all` / `--baselines` / `--models`)
+runs each model as its own `run.py --model ...` subprocess, so it appends one row per model, not
+one for the sweep.
+
+The two durations answer different questions. `predict_seconds` is the model: one shared runner
+now times that span with the same code for every model, so the numbers are measured uniformly.
+`wall_seconds` is operational — how long the job held the machine, for planning cluster time — and
+says as much about weight loading and disk as about the detector.
+
+Rows are only comparable to each other when what surrounds them matched: the log records neither
+the hardware nor the input resolution (`--resize`), and models batch differently, so compare
+within a set of runs you know shared those, not across the file at large.
+
+Timing stays out of the **predictions** CSVs, whose schema is strictly per-image. Keep it that
+way — the separate file is what stops a duration from being read as a per-image column.
 
 ## Git
 
 The contents of `results/` are **git-ignored** — only `.gitkeep` files and this README are tracked.
 Everything produced so far has been throwaway test output. Revisit once real benchmark runs land.
+
+`run_log.csv` is git-ignored with the rest: it is a record of what a given machine has run, and an
+append-only file committed from several machines would conflict on nearly every run. Track it (one
+`!/results/run_log.csv` line in `.gitignore`) only if the history is wanted in the repo.
