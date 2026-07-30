@@ -58,6 +58,17 @@ to the group that actually ran, so sweeping the baselines never deletes a
 models/ venv this invocation never touched. The group is derived from the
 MODELS registry by directory (see BASELINES below), not maintained separately.
 
+--models is the same thing for an arbitrary subset, named on the command line
+(comma-separated, and/or by repeating the flag):
+
+    python3 run.py --models tf-npr,freqnet --dataset ffhq_test
+    python3 run.py --models tf-npr --models freqnet --dataset ffhq_test
+
+Same re-exec, same cleanup, same subset-limited cleanup of shared clones and
+venvs as --baselines. Names are validated against MODELS before anything runs,
+so a typo fails immediately instead of after the earlier models have been
+scored. --all, --baselines and --models are alternatives; pass at most one.
+
 --all runs every model in MODELS (and every known variant of a model, e.g.
 co-spy's train_dataset=progan / sd-v1_4, or aide's three checkpoints — see
 VARIANT_ARGS below) against one dataset, then deletes that model's cloned
@@ -276,6 +287,27 @@ def parse_model_args(pairs):
         key, value = pair.split("=", 1)
         kwargs[key] = value
     return kwargs
+
+
+def parse_model_names(values, parser):
+    """Turn --models values into the subset of MODELS names run_all() sweeps.
+
+    Accepts comma-separated names, a repeated flag, or both. Unknown names are
+    rejected up front rather than mid-sweep, since a sweep can take hours and a
+    typo would otherwise surface only after the models before it have run.
+    Also rejects BESPOKE models (aeroblade), which run_all() cannot drive."""
+    names = [name.strip() for value in values for name in value.split(",")]
+    names = [name for name in names if name]
+    if not names:
+        parser.error("--models needs at least one model name")
+    for name in names:
+        if name in BESPOKE:
+            parser.error(
+                f"'{name}' has its own runner and can't be swept — use: {BESPOKE[name]}"
+            )
+        if name not in MODELS:
+            parser.error(f"unknown model '{name}'. Available: {', '.join(sorted(MODELS))}")
+    return frozenset(names)
 
 
 def _result_stem(module, model_name):
@@ -712,19 +744,26 @@ def main():
         help="like --all but only the TrueFake baselines (" + ", ".join(sorted(BASELINES)) + ")",
     )
     parser.add_argument(
+        "--models",
+        action="append",
+        metavar="NAME[,NAME...]",
+        help="like --all but only the models named here (comma-separated, and/or "
+        "repeat the flag), e.g. --models tf-npr,freqnet",
+    )
+    parser.add_argument(
         "--keep-repo",
         action="store_true",
-        help="with --all/--baselines, skip deleting cloned repos after each model finishes",
+        help="with --all/--baselines/--models, skip deleting cloned repos after each model finishes",
     )
     parser.add_argument(
         "--keep-venv",
         action="store_true",
-        help="with --all/--baselines, skip deleting venvs after each model finishes",
+        help="with --all/--baselines/--models, skip deleting venvs after each model finishes",
     )
     parser.add_argument(
         "--dry-run",
         action="store_true",
-        help="with --all/--baselines, print what would run and what would be deleted, "
+        help="with --all/--baselines/--models, print what would run and what would be deleted, "
         "without doing either",
     )
     parser.add_argument("--list", action="store_true", help="list available models and exit")
@@ -737,15 +776,26 @@ def main():
             print(f"{name:16} {os.path.dirname(runner)}  (bespoke runner: {runner})")
         return
 
-    if args.all and args.baselines:
-        parser.error("--all and --baselines are alternatives; pass only one")
+    group_flags = [
+        flag
+        for flag, given in (("--all", args.all), ("--baselines", args.baselines), ("--models", args.models))
+        if given
+    ]
+    if len(group_flags) > 1:
+        parser.error(f"{' and '.join(group_flags)} are alternatives; pass only one")
 
-    if args.all or args.baselines:
-        flag = "--all" if args.all else "--baselines"
+    if group_flags:
+        flag = group_flags[0]
         if args.model:
             parser.error(f"{flag} runs a whole group of models; don't pass --model with it")
         if not args.dataset:
             parser.error(f"--dataset is required with {flag}")
+        if args.models:
+            only = parse_model_names(args.models, parser)
+        elif args.baselines:
+            only = BASELINES
+        else:
+            only = None
         run_all(
             args.dataset,
             limit=args.limit,
@@ -753,13 +803,13 @@ def main():
             keep_repo=args.keep_repo,
             keep_venv=args.keep_venv,
             dry_run=args.dry_run,
-            only=BASELINES if args.baselines else None,
+            only=only,
         )
         return
 
     if not args.model or not args.dataset:
         parser.error(
-            "--model and --dataset are required (or use --all, --baselines, or --list)"
+            "--model and --dataset are required (or use --all, --baselines, --models, or --list)"
         )
 
     if args.model in BESPOKE:
