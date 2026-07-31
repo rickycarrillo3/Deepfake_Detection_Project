@@ -21,6 +21,14 @@ Two different durations are logged; keep them apart:
 Both go to run_log.csv, deliberately separate from the predictions CSVs, whose
 schema stays purely per-image. print_run_summary() prints the same predict-only
 number to the console.
+
+auroc() also lives here, next to accuracy() and THRESHOLD, so the whole project
+scores from one definition. It is deliberately NOT part of print_run_summary():
+a single run covers one dataset, and every dataset here is single-class by
+construction (ground truth comes from the dataset name — ffhq -> real, anything
+else -> fake), so a per-run AUROC is always undefined. The number only exists
+once a real dataset's scores are pooled with a fake one's, which is what
+auroc_report.py does with the finished CSVs.
 """
 
 import csv
@@ -49,6 +57,44 @@ def accuracy(rows):
     """Fraction of rows whose thresholded score matches the ground-truth label."""
     correct = sum(1 for row in rows if (row["score"] >= THRESHOLD) == bool(row["label"]))
     return correct / len(rows)
+
+
+def auroc(rows):
+    """Area under the ROC curve over `rows` ({"score", "label"} each).
+
+    Returns None when the rows are all one class — AUROC is undefined there,
+    and that is the normal case for a single run (see the module docstring), so
+    callers must handle it rather than treat it as an error.
+
+    Computed as the Mann-Whitney U statistic: the probability that a randomly
+    drawn fake scores above a randomly drawn real, with ties counting a half.
+    That formulation is why the pools need not be the same size — pairing 10k
+    fakes against 20k reals is fine, since every fake/real pair contributes
+    equally and the class imbalance cancels (unlike accuracy, which the larger
+    pool would dominate). Implemented in plain Python, no sklearn: this module
+    is imported by both runners under every model's own venv, and those venvs
+    are only guaranteed pandas + tqdm.
+    """
+    pairs = sorted((float(row["score"]), int(bool(row["label"]))) for row in rows)
+    n_pos = sum(label for _, label in pairs)
+    n_neg = len(pairs) - n_pos
+    if not n_pos or not n_neg:
+        return None
+
+    # Average ranks (1-based) so tied scores share one rank — models that emit
+    # saturated 0.0/1.0 probabilities produce long ties, and ranking those
+    # arbitrarily would credit or penalize a detector for the sort order.
+    rank_sum_pos = 0.0
+    i = 0
+    while i < len(pairs):
+        j = i
+        while j + 1 < len(pairs) and pairs[j + 1][0] == pairs[i][0]:
+            j += 1
+        avg_rank = (i + j) / 2.0 + 1.0
+        rank_sum_pos += avg_rank * sum(label for _, label in pairs[i : j + 1])
+        i = j + 1
+
+    return (rank_sum_pos - n_pos * (n_pos + 1) / 2.0) / (n_pos * n_neg)
 
 
 def print_run_summary(rows, elapsed_seconds):
