@@ -63,9 +63,15 @@ Data flows: `data/` (raw image shards) → `loaders/` (yield `(image_path, label
   the bottom of `models/freqnet/model.py`). `model.py` must resolve its weights and vendored code
   relative to `__file__`, never the CWD, since `run.py` imports it from the repo root.
 
-  Note `models/DMimageDetection/` holds *two* detectors in subdirectories (`grag2021_latent`,
-  `grag2021_progan`) sharing one venv and weights download, so model directories and detectors are
-  not 1:1.
+  Note `models/DMimageDetection/` holds *two* detectors in subdirectories
+  (`DMimageDetection_DM`, `DMimageDetection_GAN` — named for the upstream repo plus the
+  generation family each checkpoint was trained on) sharing one venv and weights download, so
+  model directories and detectors are not 1:1. The directory name follows the upstream repo,
+  grip-unina/DMimageDetection (Corvi et al., ICASSP 2023); the checkpoints it ships are still
+  keyed upstream as `Grag2021_progan` / `Grag2021_latent`, which each `model.py` keeps in its
+  `MODEL_NAME` — do not rename those. Distinct from `models/grag2021/`, which wraps the
+  *different* grip-unina/GANimageDetection repo (Gragnaniello et al., ICME 2021); same lab and
+  overlapping co-authors, different paper and different weights.
 
 - **`baselines/<Detector>/`** — the six detectors benchmarked by the TrueFake paper itself
   (Dell'Anna et al., IJCNN 2025), using checkpoints supplied by its authors. Same `model.py`

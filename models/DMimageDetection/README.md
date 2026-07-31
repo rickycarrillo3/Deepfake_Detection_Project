@@ -18,10 +18,10 @@ DMimageDetection/
 │   └── Grag2021_latent/model_epoch_best.pth
 ├── setup.sh                   # sets up everything above, once
 ├── requirements.txt           # shared deps
-├── grag2021_progan/
+├── DMimageDetection_GAN/
 │   ├── model.py                # load()/predict() contract
 │   └── predict_one.py          # single-image CLI
-└── grag2021_latent/
+└── DMimageDetection_DM/
     ├── model.py
     └── predict_one.py
 ```
@@ -48,13 +48,13 @@ Each variant is run independently and writes its own `results/` output. Run from
 the repo root, using the shared venv — each variant is its own `--model`:
 
 ```bash
-models/DMimageDetection/venv/bin/python run.py --model grag2021_progan --dataset <dataset_name>
-models/DMimageDetection/venv/bin/python run.py --model grag2021_latent  --dataset <dataset_name>
+models/DMimageDetection/venv/bin/python run.py --model DMimageDetection_GAN --dataset <dataset_name>
+models/DMimageDetection/venv/bin/python run.py --model DMimageDetection_DM  --dataset <dataset_name>
 ```
 
 Single image from the terminal (either variant):
 ```bash
-cd models/DMimageDetection/grag2021_progan
+cd models/DMimageDetection/DMimageDetection_GAN
 ../venv/bin/python predict_one.py /path/to/image.png
 ```
 
@@ -63,6 +63,6 @@ cd models/DMimageDetection/grag2021_progan
 They're kept as separate `model.py` files, registered as two distinct
 models in the top-level `run.py` (rather than one model with a variant flag), because they're independent trained
 detectors for your correlation/ensembling analysis — you want
-`results/grag2021_progan/` and `results/grag2021_latent/` as genuinely
+`results/` entries for `DMimageDetection_GAN` and `DMimageDetection_DM` as genuinely
 separate signals, matching how `main.py` itself treats them as two
 entries in its `models_list`.
