@@ -12,7 +12,8 @@ and yields `(filepath, label)` pairs, where `label` is determined by the
 
 - **Lazy iteration** — yield paths rather than loading all images into memory, since runs happen
   at GPU-cluster scale.
-- **Partial data tolerant** — not all 10 shards may be present yet; loaders should only iterate
-  over what currently exists on disk.
+- **Partial data tolerant** — the shard count varies by dataset (FFHQ has 20) and uploads are
+  incremental, so loaders must discover shards by the `shard_` prefix rather than assume a count,
+  and only iterate over what currently exists on disk.
 - **Full paths** — yielded `filepath` values should be full/absolute paths, matching the
   `image_path` column expected in `results/` CSVs.

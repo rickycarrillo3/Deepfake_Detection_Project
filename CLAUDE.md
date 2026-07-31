@@ -48,8 +48,10 @@ Data flows: `data/` (raw image shards) → `loaders/` (yield `(image_path, label
   call via `predict_batch(shard_dir)` and emits extra per-autoencoder distance columns, so it does
   not fit the one-image-at-a-time contract.
 
-- **`data/<dataset_name>/shard_01..shard_10/`** — git-ignored image shards, uploaded incrementally.
-  A dataset folder may have only some shards present at any time. Ground-truth label is derived
+- **`data/<dataset_name>/shard_01../`** — git-ignored image shards, 1000 PNGs each, uploaded
+  incrementally. The shard count varies by dataset (FFHQ has 20, ~20,000 images), and a dataset
+  folder may have only some shards present at any time, so nothing may hardcode a count —
+  `loaders/` discovers them by the `shard_` prefix. Ground-truth label is derived
   from the folder name: contains `ffhq` (case-insensitive) → label `0` (real); anything else →
   label `1` (fake).
 
