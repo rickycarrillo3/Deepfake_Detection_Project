@@ -9,11 +9,14 @@ incrementally and is too large to track in git.
 data/<dataset_name>/shard_01/*.png
 data/<dataset_name>/shard_02/*.png
 ...
-data/<dataset_name>/shard_10/*.png
+data/<dataset_name>/shard_NN/*.png
 ```
 
-Each `shard_XX` subfolder contains 1000 PNG images. A `<dataset_name>` folder may not have all 10
-shards present at any given time — loaders should tolerate partial uploads.
+Each `shard_XX` subfolder contains 1000 PNG images. **The number of shards varies by dataset** —
+FFHQ has 20 (`shard_01` … `shard_20`, so ~20,000 images); other datasets have their own counts.
+Nothing should hardcode a shard count: `loaders/` discovers shards by walking for the `shard_`
+prefix, which also means a `<dataset_name>` folder need not have all of its shards present at any
+given time. Uploads are incremental, so partial trees are normal and must be tolerated.
 
 ## Label rule
 

@@ -98,6 +98,37 @@ cd baselines/P2G && PYTHON=python3.10 bash setup.sh
 This is the clearest case for the per-directory isolation the repo already
 uses: P2G genuinely cannot share an environment with the others.
 
+## P2G: never call `clip_model.encode_image()`
+
+P2G's vendored `ResidualAttentionBlock.attention()`
+(`Prompt2Guard/src/models/clip/model.py:218`) **stores** whatever attention mask
+it is handed on the module, and reads `attn_mask=None` as "reuse the stored
+one" rather than "use no mask". Masks therefore leak from one call into the
+next.
+
+Scoring an image takes two passes, and they need different mask widths: the
+zero-shot ImageNet pass sees `1 + 14*14 = 197` tokens, while the detection pass
+injects `K=7` learned prompts for `197 + 7 = 204`. So calling `encode_image()`
+(which passes `None`) for the zero-shot pass works on the *first* image and
+fails on every one after it, once a detection pass has left its wider mask
+behind:
+
+```
+RuntimeError: The shape of the 2D attn_mask is torch.Size([204, 204]),
+but should be (197, 197).
+```
+
+The fix is to pass an explicit mask of the right width rather than `None` —
+which is what upstream's oddly-named `get_none_attn_mask()` is for. `model.py`
+routes the zero-shot pass through `SliNet.extract_vector()`, which does exactly
+that (and applies the L2 normalization the pass needs anyway). An all-zeros
+mask is numerically identical to no mask, the mask being additive, so this
+changes no score.
+
+Worth knowing when adding to this adapter: any *new* call into the CLIP
+backbone has the same trap. `encode_text()` is safe only because it is called
+once in `load()`, before any detection pass has run.
+
 ## Scores are logits upstream
 
 The authors' `train.py` uses `BCEWithLogitsLoss`, and their `test.py` writes

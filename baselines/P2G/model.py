@@ -149,12 +149,27 @@ def _object_labels(tensor):
     pair. This rebuilds that same layout for a batch of one, computing the
     zero-shot pass live instead of from a pickle — our datasets are not the
     CDDB one that pickle was built for.
+
+    Must go through SliNet.extract_vector(), NOT clip_model.encode_image().
+    The vendored ResidualAttentionBlock.attention() *stores* whatever mask it
+    is given on the module, and treats `attn_mask=None` as "reuse the stored
+    one" rather than "use no mask" (clip/model.py:218). encode_image() passes
+    None, so from the second image onward it would silently inherit the
+    (1 + 14*14 + K) = 204-wide visual mask that the previous image's detection
+    pass left behind, against this pass's 197 tokens:
+
+        RuntimeError: The shape of the 2D attn_mask is torch.Size([204, 204]),
+        but should be (197, 197).
+
+    extract_vector() instead passes an explicit all-zeros 197x197 mask — which
+    is what upstream's get_none_attn_mask() exists for, and is numerically
+    identical to no mask, since the mask is additive. It also applies the same
+    L2 normalization this pass needs.
     """
     text_features, class_names = _zeroshot
 
     with torch.no_grad():
-        image_features = _model.clip_model.encode_image(tensor)
-        image_features = image_features / image_features.norm(dim=-1, keepdim=True)
+        image_features = _model.extract_vector(tensor)
         similarity = (100.0 * image_features @ text_features.T).softmax(dim=-1)
         values, indices = similarity[0].topk(_model.topk_classes)
 

@@ -14,7 +14,9 @@ ensembling / mixture of experts).
 
 ## Workflow
 
-1. Drop a dataset's shards into `data/<dataset_name>/shard_01..shard_10/`.
+1. Drop a dataset's shards into `data/<dataset_name>/shard_01../`, 1000 PNGs each. The count
+   varies by dataset (FFHQ has 20, ~20,000 images) and partial uploads are fine — `loaders/`
+   walks whatever shards are on disk.
 2. Set up a model under `models/<model_name>/` with its own environment.
 3. Run inference: for each image, load via `loaders/`, score via the model, write a row to
    `results/<model_name>/<dataset_name>.csv`.

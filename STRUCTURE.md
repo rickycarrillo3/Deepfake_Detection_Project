@@ -22,12 +22,13 @@ Evaluation image shards. Git-ignored — too large to track, uploaded incrementa
 data/<dataset_name>/shard_01/*.png
 data/<dataset_name>/shard_02/*.png
 ...
-data/<dataset_name>/shard_10/*.png
+data/<dataset_name>/shard_NN/*.png
 ```
 
-Each shard holds 1000 PNGs. Not all 10 shards need to be present at once. Ground-truth label is
-derived from the folder name: contains `ffhq` (case-insensitive) → real (`0`); anything else →
-fake (`1`).
+Each shard holds 1000 PNGs. The shard count varies by dataset — FFHQ has 20 (~20,000 images) —
+and a dataset's shards need not all be present at once, so nothing hardcodes a count. Ground-truth
+label is derived from the folder name: contains `ffhq` (case-insensitive) → real (`0`); anything
+else → fake (`1`).
 
 ### `loaders/`
 
