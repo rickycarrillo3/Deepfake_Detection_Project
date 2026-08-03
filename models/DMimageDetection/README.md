@@ -48,8 +48,8 @@ Each variant is run independently and writes its own `results/` output. Run from
 the repo root, using the shared venv — each variant is its own `--model`:
 
 ```bash
-models/DMimageDetection/venv/bin/python run.py --model DMimageDetection_GAN --dataset <dataset_name>
-models/DMimageDetection/venv/bin/python run.py --model DMimageDetection_DM  --dataset <dataset_name>
+models/DMimageDetection/venv/bin/python run.py --model dmimagedetection_GAN --dataset <dataset_name>
+models/DMimageDetection/venv/bin/python run.py --model dmimagedetection_DM  --dataset <dataset_name>
 ```
 
 Single image from the terminal (either variant):
@@ -63,6 +63,6 @@ cd models/DMimageDetection/DMimageDetection_GAN
 They're kept as separate `model.py` files, registered as two distinct
 models in the top-level `run.py` (rather than one model with a variant flag), because they're independent trained
 detectors for your correlation/ensembling analysis — you want
-`results/` entries for `DMimageDetection_GAN` and `DMimageDetection_DM` as genuinely
+`results/` entries for `dmimagedetection_GAN` and `dmimagedetection_DM` as genuinely
 separate signals, matching how `main.py` itself treats them as two
 entries in its `models_list`.

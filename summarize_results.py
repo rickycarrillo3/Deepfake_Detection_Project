@@ -12,8 +12,8 @@ TRAINING_TYPE = {
     "co-spy_sd-v1_4": "DM",
     "freqnet": "GAN",
     "grag2021": "GAN",
-    "DMimageDetection_DM": "DM",
-    "DMimageDetection_GAN": "GAN",
+    "dmimagedetection_DM": "DM",
+    "dmimagedetection_GAN": "GAN",
     "rine": "DM",
     "rine_1": "GAN1",
     "rine_2": "GAN2",
@@ -33,8 +33,8 @@ for csv_file in RESULTS_DIR.rglob("*.csv"):
         continue
 
     # Rename models in the output
-    if folder in {"DMimageDetection_GAN", "DMimageDetection_DM"}:
-        model = "DMimageDetection"
+    if folder in {"dmimagedetection_GAN", "dmimagedetection_DM"}:
+        model = "dmimagedetection"
     elif folder in {"co-spy_progan", "co-spy_sd-v1_4"}:
         model = "co-spy"
     elif folder in {"rine_1", "rine_2", "rine_4", "rine_ldm"}:

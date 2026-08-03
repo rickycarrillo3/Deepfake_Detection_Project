@@ -125,4 +125,4 @@ def result_stem():
     """Optional runner contract (see run.py): the '<model>_<family>' middle of
     the results filename. This DMImageDetection checkpoint was trained on
     ProGAN (GAN) images."""
-    return "DMimageDetection_GAN"
+    return "dmimagedetection_GAN"

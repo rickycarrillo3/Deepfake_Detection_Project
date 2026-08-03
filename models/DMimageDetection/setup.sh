@@ -75,5 +75,5 @@ fi
 
 echo ""
 echo "Setup complete. Run either variant with:"
-echo "  models/DMimageDetection/venv/bin/python run.py --model DMimageDetection_GAN --dataset <dataset_name>"
-echo "  models/DMimageDetection/venv/bin/python run.py --model DMimageDetection_DM  --dataset <dataset_name>"
+echo "  models/DMimageDetection/venv/bin/python run.py --model dmimagedetection_GAN --dataset <dataset_name>"
+echo "  models/DMimageDetection/venv/bin/python run.py --model dmimagedetection_DM  --dataset <dataset_name>"

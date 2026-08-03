@@ -77,13 +77,13 @@ downloads its own checkpoints fresh on each run, so that isn't a concern here.
 The remaining risk is the automatic detection of each model's cloned repo
 directory: it's found by locating a .git folder under the model's own
 directory, deliberately NOT climbing upward, so a repo shared between two
-MODELS entries (e.g. if DMimageDetection_DM and DMimageDetection_GAN turn out to share
+MODELS entries (e.g. if dmimagedetection_DM and dmimagedetection_GAN turn out to share
 one clone above both of their directories) will correctly find nothing to
 delete rather than guess. This search never touches this project's own
 top-level .git, since that sits above every model_dir, not below it — only
 nested clones strictly inside each model's own subtree are ever in scope.
 
-Confirmed exception: DMimageDetection_DM and DMimageDetection_GAN share one clone,
+Confirmed exception: dmimagedetection_DM and dmimagedetection_GAN share one clone,
 venv, and weights dir under models/DMimageDetection/ rather than each having
 their own (see VENV_OVERRIDE / SHARED_CLONE_ROOTS below) — handled as a
 special case, cleaned up once at the very end of the run rather than after
@@ -131,8 +131,8 @@ MODELS = {
     "aide": "models/aide",
     "rine": "models/rine",
     "cnndetection": "models/cnndetection",
-    "DMimageDetection_DM": "models/DMimageDetection/DMimageDetection_DM",
-    "DMimageDetection_GAN": "models/DMimageDetection/DMimageDetection_GAN",
+    "dmimagedetection_DM": "models/DMimageDetection/DMimageDetection_DM",
+    "dmimagedetection_GAN": "models/DMimageDetection/DMimageDetection_GAN",
     # TrueFake baselines (baselines/, see its README). Same model.py contract
     # as models/, so the runner treats them identically; they live in their own
     # top-level directory because they are one coherent set — the six detectors
@@ -185,14 +185,14 @@ VARIANT_ARGS = {
 }
 
 # Some models share one upstream clone / venv rather than each having their
-# own. Confirmed: DMimageDetection_DM and DMimageDetection_GAN both live under
+# own. Confirmed: dmimagedetection_DM and dmimagedetection_GAN both live under
 # models/DMimageDetection/ alongside one shared dmimagedetection/ clone, one
 # shared venv/, and one shared weights/ dir. Their own MODELS directories
 # (DMimageDetection_DM/, DMimageDetection_GAN/) contain only model.py + predict_one.py
 # each — no venv or .git of their own.
 VENV_OVERRIDE = {
-    "DMimageDetection_DM": "models/DMimageDetection/venv",
-    "DMimageDetection_GAN": "models/DMimageDetection/venv",
+    "dmimagedetection_DM": "models/DMimageDetection/venv",
+    "dmimagedetection_GAN": "models/DMimageDetection/venv",
 }
 
 # Models whose model.py imports no vendored upstream clone, because their
@@ -210,14 +210,14 @@ NO_CLONE_MODELS = {
 # its turn) rather than after any single dependent model finishes — deleting
 # it mid-run would break whichever dependent model hadn't run yet.
 SHARED_CLONE_ROOTS = {
-    "models/DMimageDetection/dmimagedetection": ["DMimageDetection_DM", "DMimageDetection_GAN"],
+    "models/DMimageDetection/dmimagedetection": ["dmimagedetection_DM", "dmimagedetection_GAN"],
 }
 
 # Mirrors SHARED_CLONE_ROOTS but for venvs shared across models (same
 # end-of-run-only cleanup reasoning applies) — currently just the one venv
-# both DMimageDetection_DM and DMimageDetection_GAN point at via VENV_OVERRIDE.
+# both dmimagedetection_DM and dmimagedetection_GAN point at via VENV_OVERRIDE.
 SHARED_VENV_ROOTS = {
-    "models/DMimageDetection/venv": ["DMimageDetection_DM", "DMimageDetection_GAN"],
+    "models/DMimageDetection/venv": ["dmimagedetection_DM", "dmimagedetection_GAN"],
 }
 
 # Directory names to never descend into while looking for a model's venv
@@ -310,7 +310,7 @@ def _find_git_clone_roots(model_dir, max_depth=4):
 def _setup_dir(model_name, model_dir):
     """Directory containing the model's setup.sh. Matches model_dir, except
     for models in VENV_OVERRIDE that share setup with a parent directory
-    (e.g. DMimageDetection_DM/_GAN both setup via models/DMimageDetection/)."""
+    (e.g. dmimagedetection_DM/_GAN both setup via models/DMimageDetection/)."""
     override = VENV_OVERRIDE.get(model_name)
     if override is None:
         return model_dir

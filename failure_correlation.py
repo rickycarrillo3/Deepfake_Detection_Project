@@ -9,7 +9,7 @@ subfolders), named:
 
 where <stem> is whatever a model's result_stem() returned (e.g. "aide_DM",
 "co-spy_GAN") or, for a model that doesn't define result_stem(), just its
-plain model name (e.g. "cnndetection", "DMimageDetection_DM"). <stem> is used
+plain model name (e.g. "cnndetection", "dmimagedetection_DM"). <stem> is used
 directly as the column/model identifier below — it's already authoritative
 (it's literally what model.py named the file), so there's no separate
 lookup table to keep in sync or accidentally let go stale.

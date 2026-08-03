@@ -64,7 +64,7 @@ Data flows: `data/` (raw image shards) → `loaders/` (yield `(image_path, label
   relative to `__file__`, never the CWD, since `run.py` imports it from the repo root.
 
   Note `models/DMimageDetection/` holds *two* detectors in subdirectories
-  (`DMimageDetection_DM`, `DMimageDetection_GAN` — named for the upstream repo plus the
+  (`dmimagedetection_DM`, `dmimagedetection_GAN` — named for the upstream repo plus the
   generation family each checkpoint was trained on) sharing one venv and weights download, so
   model directories and detectors are not 1:1. The directory name follows the upstream repo,
   grip-unina/DMimageDetection (Corvi et al., ICASSP 2023); the checkpoints it ships are still

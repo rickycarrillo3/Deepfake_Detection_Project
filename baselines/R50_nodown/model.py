@@ -16,7 +16,7 @@ depends on.
 Relationship to models/
 -----------------------
 This is the same architecture family as models/DMimageDetection/
-(DMimageDetection_GAN / DMimageDetection_DM), but a **different checkpoint**:
+(dmimagedetection_GAN / dmimagedetection_DM), but a **different checkpoint**:
 those are the original authors' weights, this
 one was retrained by the TrueFake authors on StyleGAN2 + SDXL. Scores are not
 interchangeable, which is why the results filename carries the tf- prefix.

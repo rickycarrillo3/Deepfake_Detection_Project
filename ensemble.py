@@ -95,7 +95,7 @@ def model_stems_for(dataset_name):
 
     The prefix is anchored on the known dataset name rather than split on '_',
     since both dataset and model names contain underscores (ffhq_test,
-    DMimageDetection_DM, co-spy_sd-v1_4_DM, ...). A file is
+    dmimagedetection_DM, co-spy_sd-v1_4_DM, ...). A file is
     results/<dataset>_<stem>_predictions.csv; strip the two ends.
     """
     prefix = f"{dataset_name}_"
