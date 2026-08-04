@@ -109,8 +109,25 @@ import tempfile
 import time
 from itertools import groupby
 
-import pandas as pd
-from tqdm import tqdm
+try:
+    import pandas as pd
+    from tqdm import tqdm
+except ModuleNotFoundError as exc:  # pragma: no cover - startup guard
+    # This runner needs only pandas + tqdm, which every model's requirements.txt
+    # already installs, so it runs under any model's venv without forcing a
+    # version alignment across models. Hitting this almost always means the
+    # wrong interpreter: launching `python run.py` from an activated conda /
+    # miniforge env (or the system python) instead of the model's own venv.
+    # Say so, rather than leaving a bare ModuleNotFoundError to be read as the
+    # model being broken.
+    raise SystemExit(
+        f"run.py needs '{exc.name}', which is missing from {sys.executable}.\n"
+        "Run it with the venv of the model you are scoring, by path — not with\n"
+        "an activated conda/miniforge env's python:\n"
+        "    models/<model>/venv/bin/python run.py --model <model> --dataset <ds>\n"
+        "If that venv does not exist yet, build it: cd models/<model> && ./setup.sh\n"
+        "(under miniforge, activate the env first and use PYTHON=$(command -v python) ./setup.sh)"
+    ) from exc
 
 REPO_ROOT = os.path.dirname(os.path.abspath(__file__))
 if REPO_ROOT not in sys.path:
