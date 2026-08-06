@@ -86,14 +86,37 @@ authors and are not publicly hosted. Drop each `best.pt` into its directory.
 
 ## A note on P2G's interpreter
 
-Five baselines build against current torch. **P2G pins `torch==2.1.0` and
-`Pillow==10.0.1`**, neither of which has wheels for recent Pythons — upstream
-tested on 3.9. Its `setup.sh` will fail on a Python 3.12+ default. Point it at
-an older interpreter:
+Five baselines build against current torch. P2G needs an older one, so it is the
+only baseline with an interpreter ceiling: its pinned
+`torch==2.2.2` / `torchvision==0.17.2` / `Pillow==10.2.0` publish wheels for
+**Python 3.8–3.12**. Past that, pip fails with `no matching distribution found
+for torch==2.2.2`, which reads like a bad pin rather than the interpreter being
+too new.
+
+Upstream actually pins `torch==2.1.0` / `Pillow==10.0.1` (they tested on 3.9),
+but those stop at cp311 — so on a 3.12 interpreter, which is what miniforge
+currently ships, setup could not build at all. The pins here are the earliest
+releases that add cp312 while still publishing cp38, so one environment covers
+3.8–3.12. That bump was checked against upstream's numbers rather than assumed
+safe: the same images scored under 3.11 + torch 2.1.0 and 3.12 + torch 2.2.2
+agree to ~1e-7 (one image bit-identical, one differing in the 7th decimal —
+ordinary float32 kernel variation across a torch minor bump), far below the
+4-decimal rounding `run.py` writes and irrelevant at the 0.5 threshold.
+
+Its `setup.sh` handles interpreter selection itself: with no `PYTHON` set it
+picks the newest 3.8–3.12 on `PATH` and reports which, and a `PYTHON` outside
+that range (or one that isn't a usable Python 3) stops it up front with the
+range and a suggested command rather than letting pip fail opaquely. It also
+discards a `venv/` left on the wrong interpreter by an earlier failed attempt,
+which would otherwise be reused and re-fail identically. To pin the interpreter
+yourself (e.g. a cluster module):
 
 ```bash
-cd baselines/P2G && PYTHON=python3.10 bash setup.sh
+cd baselines/P2G && PYTHON=python3.12 bash setup.sh
 ```
+
+Verified end to end on 3.12 and 3.11, checkpoint verification and real inference
+included (numpy stays pinned `<2`, as the requirements file explains).
 
 This is the clearest case for the per-directory isolation the repo already
 uses: P2G genuinely cannot share an environment with the others.

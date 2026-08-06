@@ -1,20 +1,33 @@
 # P2G's own environment. Kept separate from baselines/requirements.txt because
-# upstream pins torch==2.1.0 / torchvision==0.16.0, which would drag the four
-# other baselines sharing baselines/venv onto an old torch for no reason.
+# it pins an older torch, which would drag the four other baselines sharing
+# baselines/venv onto it for no reason.
 #
 # Mirrors laitifranz/Prompt2Guard's requirements.txt, minus wandb (training-only
 # telemetry) and scikit_learn (their metrics scripts; run.py computes its own).
 einops==0.8.0
 ftfy==6.2.0
-Pillow==10.0.1
 regex==2023.10.3
-torch==2.1.0
-torchvision==0.16.0
 tqdm==4.66.1
 
-# Not in upstream's requirements — it predates numpy 2.0. torch 2.1.0 is built
-# against the numpy 1.x C API, so an unpinned install resolves to numpy 2.x and
-# every tensor .numpy() call dies with "Numpy is not available".
+# Bumped off upstream's torch==2.1.0 / torchvision==0.16.0 / Pillow==10.0.1,
+# whose wheels stop at cp311 — on a 3.12 interpreter (what miniforge currently
+# ships) pip fails with "no matching distribution found for torch==2.1.0".
+# These are the earliest releases that add cp312 while still publishing cp38, so
+# one pin set now covers Python 3.8-3.12 and no one has to hunt for an old
+# interpreter. Verified wheel availability on 3.9/3.10/3.11/3.12.
+#
+# Checked against upstream's numbers rather than assumed safe: scoring the same
+# images under 3.11+torch 2.1.0 and 3.12+torch 2.2.2 agrees to ~1e-7 (one image
+# bit-identical, one differing in the 7th decimal — ordinary float32 kernel
+# variation across a torch minor bump). That is well below the 4-decimal
+# rounding run.py writes to the CSV and irrelevant at the 0.5 threshold.
+torch==2.2.2
+torchvision==0.17.2
+Pillow==10.2.0
+
+# Not in upstream's requirements — it predates numpy 2.0. torch 2.2.2 is still
+# built against the numpy 1.x C API, so an unpinned install resolves to numpy
+# 2.x and every tensor .numpy() call dies with "Numpy is not available".
 numpy<2
 
 # Required by the shared run.py, not by upstream.
