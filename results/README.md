@@ -36,6 +36,11 @@ distance columns, and gets no family suffix (`<dataset_name>_aeroblade_predictio
 | `Predicted label` | int (0 or 1)  | `score` thresholded at `metrics.THRESHOLD` (0 = real, 1 = fake)    |
 | `resize`          | string        | input regime: `"<N>x<N>"` when the run passed `--resize N`, else `"none"` |
 
+This is the schema `run.py` writes, so it is uniform across every model it drives. `aeroblade`'s
+bespoke runner is again the exception: it emits `filepath`, `score`, a `label` column, and one
+raw-distance column per autoencoder, and has no `resize` column (it does not support `--resize`).
+Read its CSVs against `models/aeroblade/README.md`, not this table.
+
 The **ground-truth** label is deliberately *not* a column: it is recoverable from the dataset
 name in the filename (contains `ffhq` → `0`/real, else → `1`/fake — see
 `loaders.label_for_dataset`) and is used only to score accuracy on the console.
@@ -71,10 +76,30 @@ within a set of runs you know shared those, not across the file at large.
 Timing stays out of the **predictions** CSVs, whose schema is strictly per-image. Keep it that
 way — the separate file is what stops a duration from being read as a per-image column.
 
+## Analysis output — `auroc_summary.csv`
+
+`auroc_report.py` pairs each fake dataset's CSV with the `ffhq` CSV *for the same model*, pools the
+two score columns, and writes `results/auroc_summary.csv` (override with `--out`). It is the third
+kind of file here — an *analysis* product derived from the predictions CSVs, not something a run
+emits — and it sits flat alongside them for the same reason everything else does.
+
+Columns: `real_dataset`, `fake_dataset`, `model`, `resize`, `n_real`, `n_fake`, `auroc`,
+`accuracy`, `real_acc`, `fake_acc`.
+
+Unlike `run_log.csv` this file is rewritten each invocation rather than appended to, so it always
+reflects whichever `--real`/`--fake` pairing produced it. The `resize` column is carried up from
+the source CSVs — a row whose inputs disagree is not a like-for-like comparison.
+
 ## Git
 
-The contents of `results/` are **git-ignored** — only `.gitkeep` files and this README are tracked.
-Everything produced so far has been throwaway test output. Revisit once real benchmark runs land.
+The contents of `results/` are **git-ignored** — only this directory's single `.gitkeep` and this
+README are tracked. Everything produced so far has been throwaway test output. Revisit once real
+benchmark runs land.
+
+Because the layout is flat, the ignore rules are flat too: there is no `!/results/**/` exception
+re-admitting subdirectories, and no nested `.gitkeep` to track. If you find a per-model
+subdirectory here it is a leftover from the pre-flat layout — delete it rather than teaching
+`.gitignore` to preserve it.
 
 `run_log.csv` is git-ignored with the rest: it is a record of what a given machine has run, and an
 append-only file committed from several machines would conflict on nearly every run. Track it (one

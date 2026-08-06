@@ -65,7 +65,9 @@ cd models/aeroblade
 PYTHONPATH=<repo_root> aeroblade_env/bin/python run.py <dataset_name>
 ```
 
-Writes `results/aeroblade/<dataset_name>.csv` with the standard
+Writes `results/<dataset_name>_aeroblade_predictions.csv` — all results
+share one flat `results/` directory, and aeroblade takes no generation-family
+suffix — with the standard
 `filepath`, `score`, `label` columns, **plus one extra column per
 autoencoder** holding its raw (unsquashed) reconstruction distance — you
 asked to keep these for the correlation analysis, since low agreement

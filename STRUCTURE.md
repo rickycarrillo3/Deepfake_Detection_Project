@@ -7,9 +7,10 @@ low-correlation models as candidates for ensembling / mixture of experts.
 ## Pipeline
 
 ```
-data/  --->  loaders/  --->  models/<model_name>/  --->  results/<model_name>/<dataset_name>.csv
-(raw shards)  (yield        (score each image)          (score + ground truth per image)
-              (image_path, label) pairs)
+data/  --->  loaders/  --->  models/<model_name>/  --->  results/<dataset_name>_<model_name>_<family>_predictions.csv
+(raw shards)  (yield        (score each image,          (one flat directory, one CSV per run)
+              (image_path,   driven by the top-level
+               label) pairs)  run.py)
 ```
 
 ## Folders
@@ -55,21 +56,30 @@ used as a template for porting additional models — see its `README.md` and `ru
 
 ### `results/`
 
-CSV outputs from model evaluation runs. Small and tracked in git (unlike `data/` and weights).
+CSV outputs from model evaluation runs. All of them live in **one flat directory** — no per-model
+or per-dataset subdirectories, because the filename already carries the dataset, the model, and
+the generation family the detector was trained on:
 
 ```
-results/<model_name>/<dataset_name>.csv
-results/<model_name>/<dataset_name>_summary.csv   # avg per-image processing time
+results/<dataset_name>_<model_name>_<generation_family>_predictions.csv
 ```
 
-CSV schema: `filepath` (full path to the evaluated image), `score` (float `[0, 1]`), `label`
-(ground truth, 0 = real / 1 = fake).
+CSV schema: `filepath` (dataset-relative, e.g. `shard_01/00042.png`), `score` (float `[0, 1]`,
+predicted fake-probability), `Predicted label` (int, `score` thresholded at `metrics.THRESHOLD`),
+and `resize` (the `--resize` regime that produced the run, else `"none"`). Ground truth is *not* a
+column — it is recoverable from the dataset name in the filename.
+
+There is no `_summary.csv`. Per-run timing goes to `results/run_log.csv`, one appended row per
+run; accuracy and AUROC are printed to the console. See `results/README.md` for both in full.
+
+Contents are git-ignored (only `.gitkeep` and `README.md` are tracked) — everything produced so
+far is throwaway test output.
 
 ## Adding a new model
 
 1. Create `models/<model_name>/` with its own isolated environment and vendored repo.
 2. Implement `model.py` exposing `load()` / `predict(image_path) -> score`.
-3. Implement `run.py` that imports `iter_dataset` from `loaders/`, runs predictions over a
-   dataset, and writes `results/<model_name>/<dataset_name>.csv` (+ `_summary.csv`).
+3. Add one line for it to the `MODELS` registry in the **top-level** `run.py`, which walks the
+   dataset, scores it, and writes the flat `results/` CSV. Do *not* add a per-model `run.py`.
 4. Once several models have results, correlate their failure patterns to pick low-correlation
    candidates for ensembling.

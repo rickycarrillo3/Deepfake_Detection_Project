@@ -45,7 +45,9 @@ models/rine/venv/bin/python run.py --model rine --dataset <dataset_name>
 ```
 
 e.g. `--dataset sd3_faces_shards` scores `data/sd3_faces_shards/shard_01..10/` and writes
-`results/rine/sd3_faces_shards.csv`.
+`results/sd3_faces_shards_rine_DM_predictions.csv`. All results share one flat `results/`
+directory; the `rine_DM` middle comes from this model's `result_stem()`, which encodes the
+`ncls` checkpoint so the four checkpoints' runs don't overwrite each other.
 
 ## Notes / assumptions carried over from the source notebook
 

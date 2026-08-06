@@ -3,12 +3,10 @@
 !/data/.gitkeep
 !/data/README.md
 
-# Results (regenerated per run; keep only the folder structure + docs)
+# Results (regenerated per run; one flat directory, so keep only the dir + docs)
 /results/**
-!/results/**/
 !/results/.gitkeep
 !/results/README.md
-!/results/**/.gitkeep
 
 # Model weights
 *.pth
