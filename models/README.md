@@ -75,8 +75,22 @@ from the command line with `--model-arg key=value`, so the runner never needs to
 That's it — do not write a `run.py`. The per-model runners used to be copy-pasted near-duplicates
 that drifted apart and had to be bug-fixed one by one; they were consolidated deliberately.
 
-## Exception: aeroblade
+## Optional CSV-schema hooks
 
-`models/aeroblade/` keeps its own `run.py`. It scores a whole shard per call via
-`predict_batch(shard_dir)` and emits extra per-autoencoder distance columns, so it does not fit the
-one-image-at-a-time contract. It is the only exception.
+A `model.py` whose output does not fit the default CSV schema may define these module-level
+names; `run.py` reads them with `getattr` defaults, so nothing else needs to change:
+
+| hook | default | effect |
+|---|---|---|
+| `SCORE_COLUMN` | `"score"` | renames the score column |
+| `SCORE_PRECISION` | `4` | decimals the score and extra columns are rounded to |
+| `PREDICTED_LABEL` | `True` | `False` drops the `Predicted label` column and the console accuracy line |
+| `SUPPORTS_RESIZE` | `True` | `False` makes `--resize` an error for this model |
+| `extra_columns(image_path)` | — | dict of extra columns, written right after the score |
+
+Only `models/aeroblade/` uses them today: it is training-free and returns a raw LPIPS
+reconstruction distance rather than a fake-probability, so there is no `[0, 1]` score to
+threshold. It also scores a whole directory per upstream call, and `predict()` caches by parent
+directory to keep that batching under the one-image-at-a-time contract — which is why it declines
+`--resize`. See `models/aeroblade/README.md`. Reach for these hooks only when a model genuinely
+does not produce a fake-probability; they are not a general escape hatch.

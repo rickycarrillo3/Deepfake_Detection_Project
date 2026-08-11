@@ -24,8 +24,8 @@ ffhq_test_rine1_DM_predictions.csv
 flux_test_co-spy_sd-v1_4_DM_predictions.csv
 ```
 
-`aeroblade` is the exception: it has its own bespoke runner, emits extra per-autoencoder
-distance columns, and gets no family suffix (`<dataset_name>_aeroblade_predictions.csv`).
+`aeroblade` gets no family suffix (`<dataset_name>_aeroblade_predictions.csv`): it is
+training-free, so there is no generation family it was trained on.
 
 ## CSV schema
 
@@ -35,6 +35,22 @@ distance columns, and gets no family suffix (`<dataset_name>_aeroblade_predictio
 | `score`           | float [0, 1]  | model's predicted fake-probability score                          |
 | `Predicted label` | int (0 or 1)  | `score` thresholded at `metrics.THRESHOLD` (0 = real, 1 = fake)    |
 | `resize`          | string        | input regime: `"<N>x<N>"` when the run passed `--resize N`, else `"none"` |
+
+### aeroblade's schema
+
+`aeroblade` is the one model that does not output a fake-probability — it is training-free and
+returns the LPIPS reconstruction error of the best-matching autoencoder — so it declares the
+optional schema hooks in `run.py` (see `models/README.md`) and writes instead:
+
+```
+filepath,reconstruction score,stable-diffusion-v1-1,kandinsky-2-1,resize
+```
+
+`reconstruction score` is that raw distance (negative LPIPS; larger = easier to reconstruct =
+more likely diffusion-generated), **not** a `[0, 1]` probability, so there is no
+`Predicted label` column and no accuracy on the console — the method defines no real/fake
+cutoff, only a ranking. The two middle columns are the per-autoencoder raw distances, kept for
+the correlation analysis. `--resize` is rejected for this model.
 
 The **ground-truth** label is deliberately *not* a column: it is recoverable from the dataset
 name in the filename (contains `ffhq` → `0`/real, else → `1`/fake — see
@@ -54,8 +70,8 @@ rather than being rewritten by one:
 | `predict_seconds` | float  | the model's `predict()` calls summed on their own                    |
 | `wall_seconds`    | float  | the whole invocation, weight loading and CSV writing included         |
 
-Written by `metrics.append_run_log()`, which aeroblade's bespoke runner calls too, so its runs
-appear in the same log under the name `aeroblade`. A sweep (`--all` / `--baselines` / `--models`)
+Written by `metrics.append_run_log()` from the one shared runner, so every model's runs — aeroblade
+included, under the name `aeroblade` — land in this log. A sweep (`--all` / `--baselines` / `--models`)
 runs each model as its own `run.py --model ...` subprocess, so it appends one row per model, not
 one for the sweep.
 

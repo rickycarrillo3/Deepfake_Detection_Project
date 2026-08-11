@@ -1,9 +1,9 @@
 """Shared end-of-run console summary, plus the append-only run log.
 
-Lives at the repo root (like run.py) so both runners — the shared one and
-aeroblade's bespoke one — report accuracy and inference time identically. If
-each computed its own, the threshold or the rounding would drift apart and the
-numbers would stop being comparable across models.
+Lives at the repo root, next to run.py, so every model's run reports accuracy
+and inference time identically. If each computed its own, the threshold or the
+rounding would drift apart and the numbers would stop being comparable across
+models.
 
 Two different durations are logged; keep them apart:
 
@@ -38,7 +38,7 @@ from datetime import datetime
 # A score is a predicted fake-probability in [0, 1]; >= this counts as fake (1).
 THRESHOLD = 0.5
 
-# Appended to by every run of every model, from both runners. Under results/
+# Appended to by every run of every model. Under results/
 # alongside the predictions it describes, and git-ignored with them — it is a
 # record of what this machine has run, not a project artifact to share.
 RUN_LOG = "results/run_log.csv"
@@ -72,7 +72,7 @@ def auroc(rows):
     fakes against 20k reals is fine, since every fake/real pair contributes
     equally and the class imbalance cancels (unlike accuracy, which the larger
     pool would dominate). Implemented in plain Python, no sklearn: this module
-    is imported by both runners under every model's own venv, and those venvs
+    is imported by the runner under every model's own venv, and those venvs
     are only guaranteed pandas + tqdm.
     """
     pairs = sorted((float(row["score"]), int(bool(row["label"]))) for row in rows)
@@ -97,13 +97,21 @@ def auroc(rows):
     return (rank_sum_pos - n_pos * (n_pos + 1) / 2.0) / (n_pos * n_neg)
 
 
-def print_run_summary(rows, elapsed_seconds):
+def print_run_summary(rows, elapsed_seconds, show_accuracy=True):
     """Print accuracy and inference time.
 
     `elapsed_seconds` must be the model's prediction calls summed on their own —
     no weight loading, no dataset walking, no CSV writing — so that the number
     reflects the model rather than the runner wrapped around it.
+
+    `show_accuracy=False` for models whose score is not a fake-probability, so
+    THRESHOLD does not apply to it (aeroblade returns a raw reconstruction
+    distance). Reporting an accuracy there would be a number with no meaning
+    rather than a bad one.
     """
+    if not show_accuracy:
+        print(f"Time elapsed: {elapsed_seconds:.4f}s")
+        return
     print(f"Accuracy: {accuracy(rows):.2f}")
     print(f"Time elapsed: {elapsed_seconds:.4f}s")
 
@@ -113,7 +121,7 @@ def append_run_log(repo_root, model_name, dataset_name, n_images, predict_second
 
     `model_name` is the MODELS registry name from run.py, so a row joins back to
     the registry (and to the predictions CSV) by name. Called once per
-    invocation by both runners — under --all/--baselines/--models each model is
+    invocation by the runner — under --all/--baselines/--models each model is
     a separate `run.py --model ...` subprocess, so a sweep naturally appends one
     row per model rather than one for the sweep.
 

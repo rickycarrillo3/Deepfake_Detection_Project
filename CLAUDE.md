@@ -44,9 +44,12 @@ Data flows: `data/` (raw image shards) → `loaders/` (yield `(image_path, label
   actually ran and a subset sweep never deletes a directory it never touched. `--models` names are
   validated up front, so a typo fails before the sweep starts rather than hours into it.
 
-  **Exception:** `aeroblade` keeps its own `models/aeroblade/run.py`. It scores a whole shard per
-  call via `predict_batch(shard_dir)` and emits extra per-autoencoder distance columns, so it does
-  not fit the one-image-at-a-time contract.
+  There is **no** exception: every model, `aeroblade` included, goes through this runner. A model
+  whose output does not fit the default CSV schema says so with optional module-level names in its
+  `model.py`, read by `run.py` via `getattr` defaults: `SCORE_COLUMN`, `SCORE_PRECISION`,
+  `PREDICTED_LABEL`, `SUPPORTS_RESIZE`, and `extra_columns(image_path)`. Only `aeroblade` uses
+  them (see below and `models/README.md`); they are for scores that are genuinely not
+  fake-probabilities, not a general escape hatch.
 
 - **`data/<dataset_name>/shard_01../`** — git-ignored image shards, 1000 PNGs each, uploaded
   incrementally. The shard count varies by dataset (FFHQ has 20, ~20,000 images), and a dataset
@@ -107,7 +110,8 @@ Data flows: `data/` (raw image shards) → `loaders/` (yield `(image_path, label
   else→DM), aide's follows `checkpoint` (progan→GAN, sd14→DM, genimage kept literal), and rine
   (always trained on latent-diffusion data, so family `DM`) puts its `ncls` in the model slot —
   `rineldm`, `rine1`, `rine2`, `rine4`. `aeroblade` gets no family suffix
-  (`<dataset_name>_aeroblade_predictions.csv`). Output schema is `filepath` (string,
+  (`<dataset_name>_aeroblade_predictions.csv`) — training-free, so there is no family it was
+  trained on. Output schema is `filepath` (string,
   dataset-relative, e.g. `shard_01/00042.png`; unambiguous alongside the CSV's own
   `<dataset_name>` in its name), `score` (float `[0, 1]`, predicted fake-probability),
   `Predicted label` (int `0`/`1`: `score` thresholded at `metrics.THRESHOLD`), and `resize`
@@ -116,17 +120,28 @@ Data flows: `data/` (raw image shards) → `loaders/` (yield `(image_path, label
   contains `ffhq`, 1 otherwise) is deliberately *not* a CSV column: it is recoverable from the
   dataset name in the filename and is used only to score accuracy on the console.
 
+  `aeroblade` is the one model that departs from that schema, via the hooks listed above. It is
+  training-free and returns the LPIPS reconstruction error of the best-matching autoencoder — a
+  raw *negative* distance, larger meaning easier to reconstruct, with no real/fake cutoff defined
+  anywhere in the paper (it only ever ranks them). So it writes `filepath`, `reconstruction score`
+  (that raw distance, **not** in `[0, 1]`), one raw-distance column per autoencoder
+  (`stable-diffusion-v1-1`, `kandinsky-2-1` — kept for the correlation analysis), and `resize`.
+  No `Predicted label` column and no console accuracy: thresholding an uncalibrated distance at
+  `0.5` would invent a cutoff the method does not have. Do not "restore" either one.
+
   `--resize N` standardizes the input for a fair cross-model comparison: `run.py` feeds every
   model an identical N×N (bicubic) copy of each image *before* that model's own preprocessing,
   rather than each model scoring at native resolution with only its own built-in resize. The
   `resize` column records which regime produced each CSV so runs are not silently mixed. The
   resize is done outside the timed span (it is runner bookkeeping, not model inference — see the
-  timing note below), and `aeroblade`'s bespoke runner does not support it.
+  timing note below). `aeroblade` rejects `--resize` (`SUPPORTS_RESIZE = False`): the resize path
+  rewrites every image to one reused temp filename, which its per-directory score cache would
+  read as a single one-image directory.
 
   **Timing goes to `results/run_log.csv`, never into a predictions CSV, and there is still no
   `_summary.csv`.** Every run appends one row — `timestamp`, `model` (the `MODELS` registry name),
-  `dataset`, `n_images`, `predict_seconds`, `wall_seconds` — via `metrics.append_run_log()`, which
-  aeroblade's bespoke runner calls too so its runs land in the same log under `aeroblade`. A sweep
+  `dataset`, `n_images`, `predict_seconds`, `wall_seconds` — via `metrics.append_run_log()`, called
+  from the one shared runner, so every model's runs land in the same log. A sweep
   appends one row per model, since each model runs as its own `run.py --model ...` subprocess.
   Images that fail to score are skipped and counted to the console; they are excluded from
   `n_images` and from every CSV.
@@ -141,10 +156,11 @@ Data flows: `data/` (raw image shards) → `loaders/` (yield `(image_path, label
   run-level number from being read as a per-image column.
 
   At the end of a run, accuracy (thresholded at `0.5`) and inference time are printed **to the
-  console** — see `metrics.py`, which both `run.py` and aeroblade's bespoke runner call so the
-  threshold and formatting cannot drift apart. The reported time is the model's prediction calls
-  summed on their own: each `predict()` is timed individually and added up (aeroblade likewise sums
-  its `predict_batch()` calls), so it excludes one-off weight loading *and* the runner's own work —
+  console** — see `metrics.py`, called from the one place so the threshold and formatting cannot
+  drift apart (accuracy is skipped for models whose score is not a fake-probability, i.e.
+  `aeroblade`). The reported time is the model's prediction calls summed on their own: each
+  `predict()` is timed individually and added up, so it excludes one-off weight loading *and* the
+  runner's own work —
   walking the dataset, building rows, writing the CSV. Keep any new timing inside that span only;
   a timer wrapped around the scoring loop silently bills the runner's bookkeeping to the model —
   that wider span is `wall_seconds`, which the run log already records separately.

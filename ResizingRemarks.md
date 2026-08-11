@@ -37,7 +37,7 @@ resample the whole image down.
 |---|---|---|
 | **DMimageDetection** (`DMimageDetection_DM` & `DMimageDetection_GAN`) | `ToTensor` + normalize only, **no resize/crop**, fully-conv ResNet-50 (`model.py:101`, upstream `get_list_norm('resnet')`) | ~21× FLOPs on a 1024² image — the model this investigation started from |
 | **cnndetection** | `CROP_SIZE = None` → **no crop by default**, native resolution, also a ResNet (`models/cnndetection/model.py:49`) | **same problem** |
-| **aeroblade** | reconstruction-distance through Stable Diffusion autoencoders | heaviest by design; has its own bespoke runner |
+| **aeroblade** | reconstruction-distance through Stable Diffusion autoencoders | heaviest by design; scores a whole shard per upstream call |
 
 ## Findings
 

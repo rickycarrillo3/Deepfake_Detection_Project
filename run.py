@@ -18,6 +18,20 @@ where "Predicted label" is the score thresholded to 0/1 at metrics.THRESHOLD.
 The ground-truth label (0 for ffhq datasets, 1 otherwise) is not written to the
 CSV; it is used only to score accuracy on the console.
 
+A model.py may adjust that schema through four optional module-level hooks,
+read with getattr defaults so no other model.py needs to define them:
+    SCORE_COLUMN     rename the score column (default "score")
+    SCORE_PRECISION  decimals the score and extras are rounded to (default 4)
+    PREDICTED_LABEL  False drops the "Predicted label" column, and with it the
+                     console accuracy line
+    SUPPORTS_RESIZE  False makes --resize an error for that model
+    extra_columns(image_path) -> dict of extra columns, written after the score
+Only aeroblade uses them today: it is training-free and returns a raw LPIPS
+reconstruction distance rather than a fake-probability, so its score column is
+"reconstruction score", there is no thresholded label to report, and it adds one
+raw-distance column per autoencoder. Its per-shard result cache is also why it
+refuses --resize (see models/aeroblade/model.py).
+
 where <family> is the generation family the detector was trained on (GAN/DM).
 A model.py may optionally define a module-level `result_stem()` function, called
 (with no arguments) after load() to override the "<model>_<family>" middle of
@@ -34,7 +48,7 @@ by this one runner, it is measured the same way for every model.
 
 Every run also appends one row to results/run_log.csv (timestamp, model,
 dataset, n_images, predict_seconds, wall_seconds) — see metrics.append_run_log,
-which aeroblade's bespoke runner calls too, so its runs land in the same log.
+so every model's runs land in the same log.
 Timing stays out of the *predictions* CSVs, whose schema is per-image; the log
 is a separate file precisely so a duration is never mistaken for a per-image
 column. Note the log records neither hardware nor image dimensions, so rows are
@@ -51,7 +65,9 @@ span (it is this runner's bookkeeping, like walking the dataset), and every
 output CSV records which setting produced it in a `resize` column ("NxN" when
 --resize was used this run, else "none"). Note the resampling is fixed to
 bicubic here so the standardization itself is identical across models; a
-model's own downstream resize (e.g. freqnet's 256) still runs on top.
+model's own downstream resize (e.g. freqnet's 256) still runs on top. Models
+that set SUPPORTS_RESIZE = False (aeroblade) reject --resize outright rather
+than score a standardized input incorrectly.
 
 --baselines is --all restricted to the TrueFake baselines (the six tf-*
 entries under baselines/), for sweeping just that set against one dataset:
@@ -163,6 +179,10 @@ MODELS = {
     "cnndetection": "models/cnndetection",
     "DMimageDetection_DM": "models/DMimageDetection/DMimageDetection_DM",
     "DMimageDetection_GAN": "models/DMimageDetection/DMimageDetection_GAN",
+    # Training-free, and the one model whose score is a raw reconstruction
+    # distance rather than a fake-probability — see the CSV-schema hooks below
+    # and models/aeroblade/model.py.
+    "aeroblade": "models/aeroblade",
     # TrueFake baselines (baselines/, see its README). Same model.py contract
     # as models/, so the runner treats them identically; they live in their own
     # top-level directory because they are one coherent set — the six detectors
@@ -184,12 +204,6 @@ MODELS = {
 # sync with it.
 BASELINES = frozenset(name for name, path in MODELS.items() if path.startswith("baselines/"))
 
-# AEROBLADE scores a whole shard per call (predict_batch) and emits extra
-# per-autoencoder distance columns, so it keeps its own runner. --all skips it
-# for the same reason: its CLI contract doesn't match this runner's.
-BESPOKE = {
-    "aeroblade": "models/aeroblade/run.py",
-}
 
 # Extra --model-arg sets to run per model, for models with more than one
 # meaningfully-different weight set. A model not listed here runs once with no
@@ -301,17 +315,12 @@ def parse_model_names(values, parser):
 
     Accepts comma-separated names, a repeated flag, or both. Unknown names are
     rejected up front rather than mid-sweep, since a sweep can take hours and a
-    typo would otherwise surface only after the models before it have run.
-    Also rejects BESPOKE models (aeroblade), which run_all() cannot drive."""
+    typo would otherwise surface only after the models before it have run."""
     names = [name.strip() for value in values for name in value.split(",")]
     names = [name for name in names if name]
     if not names:
         parser.error("--models needs at least one model name")
     for name in names:
-        if name in BESPOKE:
-            parser.error(
-                f"'{name}' has its own runner and can't be swept — use: {BESPOKE[name]}"
-            )
         if name not in MODELS:
             parser.error(f"unknown model '{name}'. Available: {', '.join(sorted(MODELS))}")
     return frozenset(names)
@@ -460,6 +469,23 @@ def run(model_name, dataset_name, limit=None, force_label=None, model_kwargs=Non
     module = load_model_module(model_name, model_dir)
     module.load(**(model_kwargs or {}))
 
+    # Optional CSV-schema hooks. Every model gets the default schema
+    # (filepath, score, Predicted label, resize) unless its model.py opts out —
+    # currently only aeroblade does, because its score is a raw reconstruction
+    # distance, not a fake-probability, so "score" is the wrong name for it and
+    # thresholding it into a 0/1 column would invent a cutoff the method
+    # doesn't have. See models/aeroblade/model.py.
+    score_col = getattr(module, "SCORE_COLUMN", "score")
+    emit_predicted_label = getattr(module, "PREDICTED_LABEL", True)
+    precision = getattr(module, "SCORE_PRECISION", 4)
+    extra_columns = getattr(module, "extra_columns", None)
+
+    if resize is not None and not getattr(module, "SUPPORTS_RESIZE", True):
+        raise SystemExit(
+            f"--resize is not supported for '{model_name}' (its model.py sets "
+            f"SUPPORTS_RESIZE = False); re-run without it."
+        )
+
     # When --resize is set, each image is re-encoded into this scratch dir and the
     # copy (not the original) is scored. One reused path is enough — scoring is
     # single-threaded and sequential, so each image overwrites the last. Cleaned up
@@ -523,15 +549,22 @@ def run(model_name, dataset_name, limit=None, force_label=None, model_kwargs=Non
             # CSV instead carries `Predicted label`: the score thresholded to 0/1 at
             # metrics.THRESHOLD, the same cutoff print_run_summary scores accuracy
             # against, so the discrete column and the reported accuracy cannot drift.
-            rows.append(
-                {
-                    "filepath": rel_to_dataset(image_path, dataset_name),
-                    "score": round(float(score), 4),
-                    "label": int(force_label if force_label is not None else label),
-                    "Predicted label": int(float(score) >= THRESHOLD),
-                    "resize": resize_tag,
-                }
-            )
+            row = {
+                "filepath": rel_to_dataset(image_path, dataset_name),
+                score_col: round(float(score), precision),
+                "label": int(force_label if force_label is not None else label),
+            }
+            # Anything the model wants alongside its score (aeroblade's
+            # per-autoencoder raw distances). Read after predict(), so a model
+            # can serve it from whatever that call already computed.
+            if extra_columns is not None:
+                row.update(
+                    {k: round(float(v), precision) for k, v in extra_columns(image_path).items()}
+                )
+            if emit_predicted_label:
+                row["Predicted label"] = int(float(score) >= THRESHOLD)
+            row["resize"] = resize_tag
+            rows.append(row)
 
     if tmp_dir is not None:
         shutil.rmtree(tmp_dir, ignore_errors=True)
@@ -547,14 +580,16 @@ def run(model_name, dataset_name, limit=None, force_label=None, model_kwargs=Non
 
     stem = _result_stem(module, model_name)
     results_csv = os.path.join(results_dir, f"{dataset_name}_{stem}_predictions.csv")
-    pd.DataFrame(rows, columns=["filepath", "score", "Predicted label", "resize"]).to_csv(
-        results_csv, index=False
-    )
+    # Columns come from the rows themselves (minus the metrics-only ground-truth
+    # label), so a model's extra columns land in the order it produced them and
+    # the default schema stays filepath, score, Predicted label, resize.
+    columns = [key for key in rows[0] if key != "label"]
+    pd.DataFrame(rows, columns=columns).to_csv(results_csv, index=False)
 
     print(f"Wrote {len(rows)} rows to {results_csv}")
     if num_skipped:
         print(f"Skipped {num_skipped} image(s)")
-    print_run_summary(rows, elapsed)
+    print_run_summary(rows, elapsed, show_accuracy=emit_predicted_label)
     return len(rows), elapsed
 
 
@@ -782,8 +817,6 @@ def main():
     if args.list:
         for name in sorted(MODELS):
             print(f"{name:16} {MODELS[name]}")
-        for name, runner in sorted(BESPOKE.items()):
-            print(f"{name:16} {os.path.dirname(runner)}  (bespoke runner: {runner})")
         return
 
     group_flags = [
@@ -822,10 +855,6 @@ def main():
             "--model and --dataset are required (or use --all, --baselines, --models, or --list)"
         )
 
-    if args.model in BESPOKE:
-        parser.error(
-            f"'{args.model}' has its own runner — use: {BESPOKE[args.model]}"
-        )
     if args.model not in MODELS:
         parser.error(f"unknown model '{args.model}'. Available: {', '.join(sorted(MODELS))}")
 
