@@ -106,6 +106,9 @@ Optional `--model-arg`s, all forwarded to `load()`:
 | `device` | auto | `cpu` forces CPU (by hiding the GPUs); otherwise `cuda` when available |
 | `batch_size` | 4 | reconstruction batch size — raise it to fill a bigger GPU |
 | `num_workers` | 2 | dataloader workers |
+| `keep_reconstructions` | false | keep the reconstructed PNGs (~1.5 MB/image/AE at 1024²) for faster re-runs |
+| `cache_distances` | false | keep joblib's memoized LPIPS maps (~4.6 MB/image/AE at 1024²) |
+| `full_pipelines` | false | load whole diffusion pipelines like upstream (9.6 GB) instead of just the autoencoders (430 MB) |
 
 `load()` prints the resolved device, batch size and worker count at the
 top of every run.
@@ -124,30 +127,83 @@ was not trained on a generation family.
 ## GPU / CPU
 
 Upstream resolves the device itself (`aeroblade.misc.device()` →
-`"cuda"` if `torch.cuda.is_available()`), so on a GPU box the code path
-is upstream's own: fp16 pipelines, `enable_model_cpu_offload()` and
-`torch.compile`. All three fail on a CPU-only machine, so `load()`
-installs a shim (`_patch_for_cpu()` in `model.py`) that loads in fp32,
-neutralizes the offload call and makes `torch.compile` a passthrough.
-That shim is **inert whenever CUDA is present**, so it cannot change GPU
-results. One patch does apply on both: `safe_mkdir()`'s interactive
+`"cuda"` if `torch.cuda.is_available()`), so on a GPU box the numerics
+are upstream's own: fp16 weights and `torch.compile`. Both fail on a
+CPU-only machine, so `load()` installs a shim (`_patch_for_cpu()` /
+`_patch_dtype()` in `model.py`) that loads in fp32 and makes
+`torch.compile` a passthrough. That shim is **inert whenever CUDA is
+present**, so it cannot change GPU results. (`enable_model_cpu_offload()`
+is a no-op on both, since the autoencoder-only load has no unet or text
+encoder to offload — it is moved to the device directly.) One patch
+applies on both: `safe_mkdir()`'s interactive
 "directory exists, continue? (y/n)" prompt is answered yes
 automatically, since a batch job has no stdin (it is only reached when a
 cached reconstruction directory is incomplete, e.g. after an
 interrupted run).
 
-## Reconstruction cache
+## Disk requirements
 
-`compute_distances()` writes every reconstruction to
-`aeroblade_output/reconstructions/`, and joblib memoizes the computed
-distances into `aeroblade_output/cache/`; both are reused on later runs
-against the same images and AEs, so a repeat run costs seconds. Upstream
-declares that joblib cache as `Memory(location="cache")` — relative to
-the *current working directory*, which is now the repo root — so
-`model.py` redirects it (`_patch_cache_location()`, plus a scoped
-`chdir` around the import, since joblib creates the directory eagerly at
-import time). Without that a stray `cache/` appears next to `run.py`.
+This is the most disk-hungry model in the repo. Budget for the **fixed** cost:
 
-Both directories are git-ignored and grow with each new dataset.
-`run.py --all`'s cleanup does **not** delete them (only the clone and
-the venv); remove `aeroblade_output/` by hand when you need the disk back.
+| item | size | notes |
+|---|---|---|
+| HuggingFace weights | **~430 MB** | SD's `vae` 160 MB + Kandinsky's `movq` 259 MB |
+| venv (Linux/CUDA) | **~5 GB** | upstream pins torch 2.1.2 + 12 `nvidia-*` wheels + triton (1.4 GB on macOS, which has none of those) |
+| upstream clone | 15 MB | |
+
+Upstream would make that 9.6 GB: `AutoPipelineForImage2Image.from_pretrained`
+downloads each autoencoder's whole pipeline — Kandinsky's 4.6 GB unet and 2.1 GB
+text encoder, SD's 1.6 GB unet and 580 MB safety checker — none of which
+AEROBLADE ever runs. `model.py` loads only the autoencoder itself
+(`_AutoencoderOnlyPipeline`), which is the sole component
+`compute_reconstructions()` touches; verified to produce identical distances on
+both test datasets. `--model-arg full_pipelines=true` restores upstream's
+loading. Either way, **set `HF_HOME` to scratch space**, not a quota'd home
+directory:
+
+```bash
+export HF_HOME=/scratch/$USER/hf
+```
+
+The load banner prints the resolved cache path, so you can confirm it before the
+download starts.
+
+### The growing cost, and why it is off by default
+
+Two caches would otherwise grow per image, per autoencoder (measured at 1024²):
+
+| artifact | per image per AE |
+|---|---|
+| reconstruction PNG | 1.5 MB |
+| joblib spatial-LPIPS entry | 4.6 MB |
+
+With two autoencoders that is ~12 MB per image — **~12 GB per 1000-image shard,
+~240 GB for a 20-shard dataset**, which is what exhausts a cluster quota
+mid-dataset. Neither survives being needed once the score is in the results CSV,
+so both are **off by default**: reconstructions go to a per-process directory
+deleted after each shard, and the distance memoization is unwrapped so nothing
+is written at all. A full run then leaves ~0 bytes behind.
+
+Turn either back on when re-running over the same images is worth the disk:
+
+```bash
+run.py --model aeroblade --dataset X --model-arg keep_reconstructions=true \
+                                     --model-arg cache_distances=true
+```
+
+With both on, a repeat run over the same images costs ~0.03s instead of
+recomputing the reconstruction passes on the GPU.
+
+### Where those caches live
+
+Both sit under `aeroblade_output/` (git-ignored): `reconstructions/` and
+`cache/`. Upstream declares the joblib one as `Memory(location="cache")` —
+relative to the *current working directory*, which is the repo root now that
+`run.py` imports `model.py` from there — so `model.py` redirects it
+(`_patch_distance_cache()`, plus a scoped `chdir` around the import, since
+joblib creates the directory eagerly at import time). Without that a stray
+`cache/` appears next to `run.py`.
+
+With the defaults there is nothing to clean up. If you enable either flag, note
+that `run.py --all`'s cleanup removes only the clone and the venv — delete
+`aeroblade_output/` by hand when you want that disk back.

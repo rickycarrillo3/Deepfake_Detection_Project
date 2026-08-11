@@ -129,6 +129,18 @@ Data flows: `data/` (raw image shards) → `loaders/` (yield `(image_path, label
   No `Predicted label` column and no console accuracy: thresholding an uncalibrated distance at
   `0.5` would invent a cutoff the method does not have. Do not "restore" either one.
 
+  `aeroblade` is also the one model with a real **disk** constraint, and the defaults are chosen
+  for it: upstream keeps a reconstructed PNG (~1.5 MB) and a spatial-LPIPS joblib entry (~4.6 MB)
+  per image *per autoencoder*, i.e. ~12 MB per 1024² image — ~12 GB per 1000-image shard, enough
+  to exhaust a cluster quota mid-dataset. Neither is needed once the score reaches the CSV, so
+  `model.py` discards both by default (per-process reconstruction dir deleted after each shard;
+  joblib memoization unwrapped), leaving ~0 bytes behind. `--model-arg keep_reconstructions=true`
+  / `cache_distances=true` opt back in for faster re-runs. Its weights are ~430 MB because
+  `model.py` loads only the autoencoders; upstream's own path fetches the whole pipeline around
+  each one (9.6 GB) to run components AEROBLADE never executes, and is still available via
+  `--model-arg full_pipelines=true`. Point `HF_HOME` at scratch either way. See
+  `models/aeroblade/README.md`.
+
   `--resize N` standardizes the input for a fair cross-model comparison: `run.py` feeds every
   model an identical N×N (bicubic) copy of each image *before* that model's own preprocessing,
   rather than each model scoring at native resolution with only its own built-in resize. The
