@@ -68,12 +68,14 @@ distance memoization is unwrapped entirely. Re-enable either with
 --model-arg keep_reconstructions=true / cache_distances=true, which buys faster
 re-runs over the same images at that price in disk.
 
-Separately, the weights themselves are ~10 GB in the HuggingFace cache, because
-AutoPipelineForImage2Image pulls each *whole* pipeline (Kandinsky's 4.6 GB unet,
-SD's 1.6 GB unet, both text encoders) when AEROBLADE only ever runs the
-autoencoders (160 MB + 259 MB). That is upstream's loading path, not something
-this adapter chooses; point HF_HOME at scratch space rather than a quota'd home
-directory.
+The weights are the other half of the problem. Upstream loads each autoencoder
+by way of the *whole* diffusion pipeline wrapped around it, so a run downloads
+Kandinsky's 4.6 GB unet, SD's 1.6 GB unet and both text encoders — 9.6 GB — to
+execute 419 MB of autoencoder. _AutoencoderOnlyPipeline below loads just the
+autoencoder, which is the only component compute_reconstructions() ever touches;
+measured identical distances on both test datasets. --model-arg
+full_pipelines=true restores upstream's loading if that ever proves too clever.
+Either way, point HF_HOME at scratch rather than a quota'd home directory.
 
 Devices
 ------------------------------------------------
@@ -87,6 +89,7 @@ inert whenever CUDA is present.
 
 import atexit
 import contextlib
+import json
 import os
 import shutil
 from pathlib import Path
@@ -151,6 +154,10 @@ _num_workers = NUM_WORKERS
 # --model-arg keep_reconstructions=true / cache_distances=true.
 _keep_reconstructions = False
 _cache_distances = False
+
+# Load whole diffusion pipelines like upstream (9.6 GB of weights) rather than
+# just the autoencoders they wrap (419 MB) — see _AutoencoderOnlyPipeline.
+_full_pipelines = False
 
 # Where this process writes reconstructions when it is going to delete them
 # again: its own subdirectory, so cleaning it up cannot disturb another
@@ -224,35 +231,133 @@ def _patch_noninteractive():
     ae_image.safe_mkdir = lambda directory: directory.mkdir(parents=True, exist_ok=True)
 
 
+class _AutoencoderOnlyPipeline:
+    """Stands in for the diffusion pipeline upstream loads, holding only its
+    autoencoder — the sole component AEROBLADE ever runs.
+
+    compute_reconstructions() calls
+    AutoPipelineForImage2Image.from_pretrained(repo_id, ...), then immediately
+    reaches past the pipeline for `pipe.vae` (SD) or `pipe.movq` (Kandinsky)
+    and uses nothing else. Loading the pipeline therefore downloads a unet and
+    text encoder per model that are never executed: 9.6 GB across the two
+    configured AEs, to run 419 MB of weights. This shim exposes the same two
+    attribute names and a no-op enable_model_cpu_offload(), so upstream's code
+    path is unchanged from that point on — same module, same weights, same
+    dtype, so the distances are unchanged too.
+
+    Deliberately does NOT define upcast_vae(): upstream calls it only when the
+    real pipeline has one, which among diffusers pipelines means the SDXL
+    family (and the SD upscaler). Neither configured AE is one — SD1.1 resolves
+    to StableDiffusionImg2ImgPipeline — so upstream never upcasts here, and
+    neither does this. from_pretrained() refuses an SDXL-class repo rather than
+    silently diverging if AUTOENCODERS gains one.
+    """
+
+    def __init__(self, attr_name, autoencoder):
+        setattr(self, attr_name, autoencoder)
+
+    def enable_model_cpu_offload(self, *args, **kwargs):
+        """No-op: there is no unet or text encoder here to offload, and the
+        autoencoder is moved to the device by the caller a line later."""
+
+    @staticmethod
+    def from_pretrained(repo_id, torch_dtype=None, use_safetensors=True, variant=None, **kwargs):
+        import diffusers
+        from huggingface_hub import hf_hub_download
+
+        # model_index.json (a few hundred bytes) names the pipeline class and
+        # every component's class, so which attribute holds the autoencoder and
+        # what type it is are read from the repo rather than guessed per repo id.
+        with open(hf_hub_download(repo_id, "model_index.json")) as f:
+            index = json.load(f)
+
+        pipeline_class = str(index.get("_class_name", ""))
+        if "XL" in pipeline_class:
+            raise RuntimeError(
+                f"{repo_id} loads as {pipeline_class}; the SDXL pipelines upcast the "
+                f"VAE to fp32 (pipe.upcast_vae()), which this autoencoder-only path "
+                f"does not reproduce. Re-run with --model-arg full_pipelines=true."
+            )
+
+        for attr_name in ("vae", "movq"):
+            if attr_name in index:
+                break
+        else:
+            raise RuntimeError(
+                f"{repo_id} has neither a 'vae' nor a 'movq' in model_index.json, so "
+                f"its autoencoder cannot be loaded on its own. Re-run with "
+                f"--model-arg full_pipelines=true."
+            )
+
+        class_name = index[attr_name][1]
+        autoencoder = getattr(diffusers, class_name).from_pretrained(
+            repo_id,
+            subfolder=attr_name,
+            torch_dtype=torch_dtype,
+            use_safetensors=use_safetensors,
+            variant=variant,
+        )
+        return _AutoencoderOnlyPipeline(attr_name, autoencoder)
+
+
+def _patch_ae_only():
+    """Load only the autoencoders, not the pipelines wrapped around them."""
+    import aeroblade.image as ae_image
+
+    ae_image.AutoPipelineForImage2Image = _AutoencoderOnlyPipeline
+
+
 def _patch_for_cpu():
     """Make upstream's CUDA-only assumptions survive a CPU-only machine.
 
-    Called only when no CUDA device is present, so a GPU run is byte-for-byte
-    upstream behaviour. compute_reconstructions() in aeroblade/src/aeroblade/
-    image.py hardcodes three things that fail without a GPU:
+    Called only when no CUDA device is present, so a GPU run keeps upstream's
+    own behaviour. compute_reconstructions() in aeroblade/src/aeroblade/image.py
+    hardcodes three things that fail without a GPU:
 
       1. torch_dtype=torch.float16 — CPU convolutions have no Half kernel.
+         Handled by _dtype() below, which every load path here goes through.
       2. pipe.enable_model_cpu_offload() — diffusers raises without an
-         accelerator to offload from.
-      3. torch.compile(ae) — unnecessary here, and a common source of
-         backend failures on macOS.
+         accelerator to offload from. With --model-arg full_pipelines=true a
+         real pipeline is loaded, so neutralize the call on it; the
+         autoencoder-only shim's own version is already a no-op.
+      3. torch.compile(ae) — unnecessary here, and a common source of backend
+         failures on macOS.
     """
     import aeroblade.image as ae_image
 
-    original_from_pretrained = ae_image.AutoPipelineForImage2Image.from_pretrained
+    if _full_pipelines:
+        original_from_pretrained = ae_image.AutoPipelineForImage2Image.from_pretrained
+
+        def from_pretrained_no_offload(repo_id, *args, **kwargs):
+            pipe = original_from_pretrained(repo_id, *args, **kwargs)
+            pipe.enable_model_cpu_offload = lambda *a, **kw: None
+            return pipe
+
+        ae_image.AutoPipelineForImage2Image.from_pretrained = staticmethod(
+            from_pretrained_no_offload
+        )
+
+    ae_image.torch.compile = lambda module, *a, **kw: module
+
+
+def _patch_dtype():
+    """Load weights in fp32 when there is no GPU to run fp16 on.
+
+    Upstream hardcodes torch_dtype=torch.float16 in compute_reconstructions.
+    Its variant="fp16" argument is left alone either way: on the Hub these
+    repos ship safetensors *only* under the fp16 variant (the plain revision is
+    .bin), and use_safetensors=True would fail without it — diffusers casts
+    those fp16 files up to float32 on load.
+    """
+    import aeroblade.image as ae_image
+
+    loader = ae_image.AutoPipelineForImage2Image.from_pretrained
 
     def from_pretrained_fp32(repo_id, *args, **kwargs):
-        # Only the dtype changes. upstream's variant="fp16" stays: on the Hub
-        # these repos ship safetensors *only* under the fp16 variant (the plain
-        # revision is .bin), and use_safetensors=True would fail without it.
-        # diffusers casts those fp16 files up to float32 on load.
         kwargs["torch_dtype"] = torch.float32
-        pipe = original_from_pretrained(repo_id, *args, **kwargs)
-        pipe.enable_model_cpu_offload = lambda *a, **kw: None
-        return pipe
+        return loader(repo_id, *args, **kwargs)
 
     ae_image.AutoPipelineForImage2Image.from_pretrained = staticmethod(from_pretrained_fp32)
-    ae_image.torch.compile = lambda module, *a, **kw: module
 
 
 def _as_bool(value):
@@ -278,6 +383,7 @@ def load(
     num_workers=None,
     keep_reconstructions=None,
     cache_distances=None,
+    full_pipelines=None,
 ):
     """Prepare for inference. There is no persistent model object —
     compute_distances() loads the AE pipelines itself, per call.
@@ -290,9 +396,12 @@ def load(
     of discarding them. Both default to off — see the disk note in the module
     docstring; together they write ~12 MB per 1024x1024 image, which is what
     exhausts a cluster quota part-way through a dataset.
+    full_pipelines: load each autoencoder's whole diffusion pipeline the way
+    upstream does (9.6 GB of weights instead of 419 MB), as an escape hatch if
+    the autoencoder-only path ever misbehaves.
     """
     global _batch_size, _num_workers, _keep_reconstructions, _cache_distances
-    global _run_recon_root
+    global _run_recon_root, _full_pipelines
 
     if device is not None and str(device).lower().startswith("cpu"):
         # aeroblade.misc.device() only consults torch.cuda.is_available(), so
@@ -307,13 +416,18 @@ def load(
         _keep_reconstructions = _as_bool(keep_reconstructions)
     if cache_distances is not None:
         _cache_distances = _as_bool(cache_distances)
+    if full_pipelines is not None:
+        _full_pipelines = _as_bool(full_pipelines)
 
     _patch_distance_cache(_cache_distances)
     _patch_noninteractive()
+    if not _full_pipelines:
+        _patch_ae_only()  # must precede the dtype/CPU patches, which wrap it
 
     resolved = "cuda" if torch.cuda.is_available() else "cpu"
     if resolved == "cpu":
         _patch_for_cpu()
+        _patch_dtype()
 
     if _keep_reconstructions:
         # Stable path, so a later run reuses these instead of recomputing them.
@@ -340,7 +454,8 @@ def load(
         else f"KEEPING {' + '.join(kept)} — grows ~{6.1 * len(kept):.1f} MB per 1024px image per AE"
     )
     print(f"[aeroblade] disk: {growth}")
-    print(f"[aeroblade] weights cache: {_hf_cache_dir()} (~10 GB; set HF_HOME to move it)")
+    weights = "whole pipelines, ~9.6 GB" if _full_pipelines else "autoencoders only, ~419 MB"
+    print(f"[aeroblade] weights: {weights} in {_hf_cache_dir()} (set HF_HOME to move it)")
 
 
 def result_stem():
