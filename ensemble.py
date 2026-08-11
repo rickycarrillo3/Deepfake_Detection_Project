@@ -40,8 +40,9 @@ dataset's constant label, and the positive rate is the fraction the model/ensemb
 called fake. No cross-dataset pooling and no AUROC (needs both classes) in this
 pass.
 
-Aeroblade is out of scope: it has a bespoke runner, extra per-autoencoder
-columns, and its own results subdir, so it is not one of these flat CSVs.
+Aeroblade is out of scope: its CSV has a different schema — a raw
+`reconstruction score` instead of a `[0, 1]` probability, no `Predicted label`,
+plus extra per-autoencoder columns — so it does not combine with these.
 
 Depends only on pandas + numpy (both present wherever pandas is), so it runs
 under any model venv or a plain interpreter, like the other analysis scripts.
