@@ -8,6 +8,7 @@ from PIL import Image
 
 from torch.utils.data import Dataset
 
+import config 
 
 class ExpertDataset(Dataset):
 
@@ -49,8 +50,12 @@ class ExpertDataset(Dataset):
             dtype=torch.float32
         )
 
+        #expert_scores = torch.tensor(
+        #    row.iloc[2:].values.astype("float32")
+        #)
+        
         expert_scores = torch.tensor(
-            row.iloc[2:].values.astype("float32")
+            row[config.EXPERTS].values.astype("float32")
         )
 
         return (

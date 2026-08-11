@@ -4,7 +4,11 @@ import torch
 # DATA
 #########################################
 
-CSV_PATH = "moe_data/train.csv"
+CSV_PATH = "moe_data/data.csv"
+TRAIN_CSV_PATH = "moe_data/train.csv"
+TEST_CSV_PATH = "moe_data/test.csv"
+
+TTS_SEED = None
 
 IMAGE_ROOT = "moe_data/images"
 
@@ -14,7 +18,14 @@ IMAGE_ROOT = "moe_data/images"
 
 NUM_EXPERTS = 3
 
-CNN_FEATURE_DIM = 512
+EXPERTS = [
+    "rine_DM",
+    "dmimagedetection_GAN",
+    "co-spy_DM"
+]
+
+## CNN_FEATURE_DIM = 512
+CNN_FEATURE_DIM = 256
 
 HIDDEN_DIMS = [32, 16]
 
@@ -49,11 +60,16 @@ SAVE_NAME = "best_model.pt"
 # Validation split
 VAL_SPLIT = 0.2
 
+# Testing split
+TEST_SPLIT = 0.3
+
 # Training
 PATIENCE = 5
 
 # Image preprocessing
-IMAGE_SIZE = 224
+## IMAGE_SIZE = 224
+IMAGE_SIZE = 512
+
 
 # Logging
 PRINT_EVERY = 20

@@ -2,18 +2,31 @@ import argparse
 from pathlib import Path
 
 import pandas as pd
+
+from sklearn.model_selection import train_test_split
+
 from tqdm import tqdm
 
+import config
 
+
+# --------------------------------------------------
 # Dataset prefixes considered real
+# --------------------------------------------------
+
 REAL_DATASET_PREFIXES = {
     "ffhq",
 }
 
 
+# --------------------------------------------------
+# Dataset label
+# --------------------------------------------------
+
 def get_dataset_label(dataset):
     """
     Returns:
+
         0 = real
         1 = fake
     """
@@ -21,13 +34,22 @@ def get_dataset_label(dataset):
     dataset_lower = dataset.lower()
 
     for prefix in REAL_DATASET_PREFIXES:
+
         if dataset_lower.startswith(prefix):
+
             return 0
 
     return 1
 
 
-def parse_result_filename(filename, known_datasets):
+# --------------------------------------------------
+# Parse result filename
+# --------------------------------------------------
+
+def parse_result_filename(
+    filename,
+    known_datasets
+):
     """
     Example:
 
@@ -50,10 +72,13 @@ def parse_result_filename(filename, known_datasets):
     matches = [
         dataset
         for dataset in known_datasets
-        if stem.startswith(dataset + "_")
+        if stem.startswith(
+            dataset + "_"
+        )
     ]
 
     if not matches:
+
         raise ValueError(
             f"Could not identify dataset from {filename}"
         )
@@ -70,7 +95,15 @@ def parse_result_filename(filename, known_datasets):
     return dataset, model
 
 
-def find_image(data_path, dataset, filepath):
+# --------------------------------------------------
+# Find image
+# --------------------------------------------------
+
+def find_image(
+    data_path,
+    dataset,
+    filepath
+):
     """
     Resolves:
 
@@ -94,6 +127,10 @@ def find_image(data_path, dataset, filepath):
     return image_path
 
 
+# --------------------------------------------------
+# Build dataset
+# --------------------------------------------------
+
 def build_dataset(
     results_path,
     data_path,
@@ -102,9 +139,17 @@ def build_dataset(
     selected_models=None
 ):
 
-    results_path = Path(results_path)
-    data_path = Path(data_path)
-    output_path = Path(output_path)
+    results_path = Path(
+        results_path
+    )
+
+    data_path = Path(
+        data_path
+    )
+
+    output_path = Path(
+        output_path
+    )
 
 
     #
@@ -120,7 +165,10 @@ def build_dataset(
 
     print("\nAvailable datasets:")
 
-    for dataset in sorted(known_datasets):
+    for dataset in sorted(
+        known_datasets
+    ):
+
         print(
             f"  {dataset}"
         )
@@ -153,21 +201,25 @@ def build_dataset(
 
     for csv_file in result_files:
 
-        dataset, model = parse_result_filename(
-            csv_file.name,
-            known_datasets
+        dataset, model = (
+            parse_result_filename(
+                csv_file.name,
+                known_datasets
+            )
         )
 
 
         if selected_datasets:
 
             if dataset not in selected_datasets:
+
                 continue
 
 
         if selected_models:
 
             if model not in selected_models:
+
                 continue
 
 
@@ -195,7 +247,10 @@ def build_dataset(
 
     for dataset, experts in datasets.items():
 
-        print("\n" + "=" * 60)
+        print(
+            "\n" + "=" * 60
+        )
+
         print(
             f"Building dataset: {dataset}"
         )
@@ -285,7 +340,10 @@ def build_dataset(
                 )
 
 
-        if merged is None or merged.empty:
+        if (
+            merged is None
+            or merged.empty
+        ):
 
             print(
                 "No overlapping images between experts"
@@ -295,10 +353,11 @@ def build_dataset(
 
 
         #
-        # Link images and skip missing files
+        # Link images
         #
 
         output_names = []
+
         valid_rows = []
 
 
@@ -307,7 +366,10 @@ def build_dataset(
             total=len(merged),
             desc=f"Linking {dataset}"
         ):
-            filepath = row["filepath"]
+
+            filepath = row[
+                "filepath"
+            ]
 
 
             try:
@@ -320,11 +382,6 @@ def build_dataset(
 
 
             except FileNotFoundError:
-
-               # print(
-               #     f"Warning: missing image, skipping: "
-              #      f"{dataset}/{filepath}"
-              #  )
 
                 continue
 
@@ -352,7 +409,11 @@ def build_dataset(
                 destination.unlink()
 
 
-            # Create hard link instead of copying
+            #
+            # Create hard link instead
+            # of copying the image
+            #
+
             destination.hardlink_to(
                 source
             )
@@ -369,7 +430,7 @@ def build_dataset(
 
 
         #
-        # Remove rows where images were missing
+        # Remove missing images
         #
 
         merged = (
@@ -380,7 +441,7 @@ def build_dataset(
 
 
         #
-        # Create training CSV
+        # Add image column
         #
 
         merged.insert(
@@ -390,12 +451,20 @@ def build_dataset(
         )
 
 
+        #
+        # Remove original filepath
+        #
+
         merged = merged.drop(
             columns=[
                 "filepath"
             ]
         )
 
+
+        #
+        # Add label
+        #
 
         label = get_dataset_label(
             dataset
@@ -408,6 +477,14 @@ def build_dataset(
             label
         )
 
+
+        #
+        # Save per-dataset CSV
+        #
+        # This is an intermediate CSV.
+        # The final train/test split happens
+        # after all datasets are merged.
+        #
 
         output_csv = (
             dataset_output /
@@ -422,7 +499,7 @@ def build_dataset(
 
 
         print(
-            f"Saved CSV: {output_csv}"
+            f"Saved dataset CSV: {output_csv}"
         )
 
 
@@ -437,24 +514,44 @@ def build_dataset(
 
 
         for expert in merged.columns[2:]:
+
             print(
                 f"  {expert}"
             )
-            
 
-def merge_all_datasets(output_path):
 
-    output_path = Path(output_path)
+# --------------------------------------------------
+# Merge all datasets and split train/test
+# --------------------------------------------------
+
+def merge_all_datasets(
+    output_path
+):
+
+    output_path = Path(
+        output_path
+    )
+
+
+    #
+    # Final shared image directory
+    #
 
     combined_image_dir = (
         output_path /
         "images"
     )
 
+
     combined_image_dir.mkdir(
+        parents=True,
         exist_ok=True
     )
 
+
+    #
+    # Find per-dataset CSVs
+    #
 
     all_csvs = list(
         output_path.glob(
@@ -463,12 +560,26 @@ def merge_all_datasets(output_path):
     )
 
 
+    if not all_csvs:
+
+        raise RuntimeError(
+            "No dataset CSVs found"
+        )
+
+
     dfs = []
 
 
+    #
+    # Merge datasets
+    #
+
     for csv_file in all_csvs:
 
-        dataset_dir = csv_file.parent
+        dataset_dir = (
+            csv_file.parent
+        )
+
 
         image_dir = (
             dataset_dir /
@@ -491,11 +602,17 @@ def merge_all_datasets(output_path):
                 img
             )
 
+
             destination = (
                 combined_image_dir /
                 img
             )
 
+
+            #
+            # Create symbolic link to
+            # the dataset-specific image
+            #
 
             if not destination.exists():
 
@@ -511,9 +628,15 @@ def merge_all_datasets(output_path):
 
         df["image"] = new_images
 
-        dfs.append(df)
+
+        dfs.append(
+            df
+        )
 
 
+    #
+    # Combine all datasets
+    #
 
     merged = pd.concat(
         dfs,
@@ -521,22 +644,196 @@ def merge_all_datasets(output_path):
     )
 
 
+    print()
+    print(
+        "=" * 60
+    )
+
+    print(
+        "Combined dataset size:",
+        len(merged)
+    )
+
+
+    #
+    # Train/test split
+    #
+    # config.TEST_SPLIT controls the
+    # percentage placed into the test set.
+    #
+    # Example:
+    #
+    # TEST_SPLIT = 0.20
+    #
+    # gives:
+    #
+    # 80% train
+    # 20% test
+    #
+
+    try:
+
+        train_df, test_df = (
+            train_test_split(
+                merged,
+                test_size=config.TEST_SPLIT,
+                random_state= config.TTS_SEED,
+                shuffle=True,
+                stratify=merged["label"]
+            )
+        )
+
+    except ValueError:
+
+        #
+        # Fallback if stratification is not
+        # possible, e.g. only one class exists.
+        #
+
+        print(
+            "Warning: Could not stratify split."
+        )
+
+        train_df, test_df = (
+            train_test_split(
+                merged,
+                test_size=config.TEST_SPLIT,
+                random_state=42,
+                shuffle=True
+            )
+        )
+
+
+    #
+    # Create train/test directories
+    #
+
+    # train_dir = (
+    #    output_path /
+    #    "train"
+    # )
+
+
+    #test_dir = (
+    #    output_path /
+    #    "test"
+    #)
+
+
+    #train_dir.mkdir(
+    #    parents=True,
+    #    exist_ok=True
+    #)
+
+
+    #test_dir.mkdir(
+    #    parents=True,
+    #    exist_ok=True
+    #)
+
+
+    #
+    # Save train CSV
+    #
+
+    # train_csv = (
+    #    output_path /
+    #    "train.csv"
+    #)
+
+
     merged.to_csv(
-        output_path / "train.csv",
+        config.CSV_PATH,
+        index=False
+    )
+
+    train_df.to_csv(
+        config.TRAIN_CSV_PATH,
         index=False
     )
 
 
-    print(
-        f"Final dataset size: {len(merged)}"
+    #
+    # Save test CSV
+    #
+
+    #test_csv = (
+    #    output_path /
+    #    "test.csv"
+    #)
+
+
+    test_df.to_csv(
+        config.TEST_CSV_PATH,
+        index=False
     )
 
+
+    #
+    # Print results
+    #
+
+    print()
+    print(
+        "Train/test split complete."
+    )
+
+    print()
+
+    print(
+        f"TEST_SPLIT: {config.TEST_SPLIT}"
+    )
+
+    print(
+        f"Train samples: {len(train_df)}"
+    )
+
+    print(
+        f"Test samples: {len(test_df)}"
+    )
+
+    print()
+
+    print(
+        f"Train percentage: "
+        f"{len(train_df) / len(merged):.2%}"
+    )
+
+    print(
+        f"Test percentage: "
+        f"{len(test_df) / len(merged):.2%}"
+    )
+
+    print()
+    
+    print(
+        f"Full CSV: {config.CSV_PATH}"
+    )
+
+    print(
+        f"Train CSV: {config.TRAIN_CSV_PATH}"
+    )
+
+    print(
+        f"Test CSV: {config.TEST_CSV_PATH}"
+    )
+    
+    
+    print(
+        f"Images: {combined_image_dir}"
+    )
+
+
+# --------------------------------------------------
+# Main
+# --------------------------------------------------
 
 def main():
 
     parser = argparse.ArgumentParser(
         description=(
-            "Build MoE dataset from detector prediction CSVs"
+            "Build MoE dataset from detector "
+            "prediction CSVs"
         )
     )
 
@@ -544,7 +841,10 @@ def main():
     parser.add_argument(
         "--results_path",
         required=True,
-        help="Directory containing *_predictions.csv files"
+        help=(
+            "Directory containing "
+            "*_predictions.csv files"
+        )
     )
 
 
@@ -587,6 +887,10 @@ def main():
     args = parser.parse_args()
 
 
+    #
+    # Build individual datasets
+    #
+
     build_dataset(
         results_path=args.results_path,
         data_path=args.data_path,
@@ -594,14 +898,21 @@ def main():
         selected_datasets=args.datasets,
         selected_models=args.models
     )
-    
-    
+
+
+    #
+    # Merge everything and create
+    # final train/test split
+    #
+
     merge_all_datasets(
         args.output_path
     )
 
 
+# --------------------------------------------------
+# Entry point
+# --------------------------------------------------
 
 if __name__ == "__main__":
-
     main()
