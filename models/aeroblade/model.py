@@ -51,6 +51,30 @@ directory-keyed cache would hand the first image's scores to the entire
 run. run.py rejects --resize for this model rather than compute
 something silently wrong.
 
+Disk
+------------------------------------------------
+This is by far the most disk-hungry model here, and left at upstream's defaults
+it will exhaust a cluster quota part-way through a dataset. Two separate caches
+grow per image, per autoencoder (measured at 1024x1024):
+
+    reconstruction PNG          1.5 MB
+    joblib spatial-LPIPS entry  4.6 MB
+
+With the two autoencoders configured below that is ~12 MB per image: ~12 GB per
+1000-image shard, ~240 GB for a 20-shard dataset. Neither is needed once the
+score reaches the results CSV, so both are OFF by default here — reconstructions
+are written under a per-process directory and deleted after each shard, and the
+distance memoization is unwrapped entirely. Re-enable either with
+--model-arg keep_reconstructions=true / cache_distances=true, which buys faster
+re-runs over the same images at that price in disk.
+
+Separately, the weights themselves are ~10 GB in the HuggingFace cache, because
+AutoPipelineForImage2Image pulls each *whole* pipeline (Kandinsky's 4.6 GB unet,
+SD's 1.6 GB unet, both text encoders) when AEROBLADE only ever runs the
+autoencoders (160 MB + 259 MB). That is upstream's loading path, not something
+this adapter chooses; point HF_HOME at scratch space rather than a quota'd home
+directory.
+
 Devices
 ------------------------------------------------
 Upstream resolves the device itself via aeroblade.misc.device() ("cuda"
@@ -61,8 +85,10 @@ load() installs a compatibility shim — see _patch_for_cpu() — that is
 inert whenever CUDA is present.
 """
 
+import atexit
 import contextlib
 import os
+import shutil
 from pathlib import Path
 
 import torch
@@ -111,43 +137,75 @@ BATCH_SIZE = 4
 NUM_WORKERS = 2
 SEED = 1
 
-# compute_distances() caches reconstructions to disk itself and skips
-# recomputation on repeat runs against the same images/AEs.
+# compute_distances() writes a reconstructed copy of every image here, one per
+# autoencoder — see the disk note in the module docstring.
 _RECON_ROOT = _OUTPUT_ROOT / "reconstructions"
 
-# Upstream's joblib cache of computed distances — see _patch_cache_location().
+# Upstream's joblib cache of computed distances — see _patch_distance_cache().
 _CACHE_ROOT = _OUTPUT_ROOT / "cache"
 
 _batch_size = BATCH_SIZE
 _num_workers = NUM_WORKERS
+
+# Disk policy, both off by default — see the module docstring. Overridable with
+# --model-arg keep_reconstructions=true / cache_distances=true.
+_keep_reconstructions = False
+_cache_distances = False
+
+# Where this process writes reconstructions when it is going to delete them
+# again: its own subdirectory, so cleaning it up cannot disturb another
+# aeroblade process sharing the same node. Set in load().
+_run_recon_root = None
 
 # Directory-keyed score cache, holding one directory at a time (see docstring).
 _cached_dir = None
 _cached_scores = {}
 
 
-def _patch_cache_location():
-    """Keep upstream's joblib cache inside this model's own directory.
+def _memoized_funcs(module):
+    """The @mem.cache-decorated functions in an upstream module."""
+    import joblib
+
+    for name in dir(module):
+        obj = getattr(module, name)
+        if isinstance(obj, joblib.memory.MemorizedFunc):
+            yield name, obj
+
+
+def _patch_distance_cache(enabled):
+    """Decide where — or whether — upstream memoizes computed distances.
 
     aeroblade.distances and aeroblade.complexities each declare
-    Memory(location="cache"), which is relative to the *current working
-    directory* — the repo root, since run.py imports this model.py from there.
-    Left alone it drops a `cache/` next to run.py. Every model.py resolves its
-    paths from __file__ instead (see models/README.md), so repoint the already-
-    decorated functions' store backends at _CACHE_ROOT.
+    Memory(location="cache"): relative to the *current working directory*, which
+    is the repo root since run.py imports this model.py from there. Every
+    model.py resolves paths from __file__ instead (see models/README.md).
+
+    Disabled (the default) it is not a matter of *where*: that cache is by far
+    the largest thing this model writes — a spatial LPIPS map per image per
+    autoencoder, ~4.6 MB each at 1024x1024, ~9 GB per 1000-image shard — and it
+    only saves recomputing a number that already went to the results CSV. Unwrap
+    the decorated functions so calls go straight through and nothing is stored.
     """
     import joblib
 
     import aeroblade.complexities as ae_complexities
     import aeroblade.distances as ae_distances
 
+    modules = (ae_distances, ae_complexities)
+
+    if not enabled:
+        for module in modules:
+            for name, func in _memoized_funcs(module):
+                setattr(module, name, func.func)  # the undecorated original
+        # joblib created the (empty) tree eagerly at import; take it back out.
+        shutil.rmtree(_CACHE_ROOT, ignore_errors=True)
+        return
+
     memory = joblib.Memory(location=str(_CACHE_ROOT), compress=("lz4", 9), verbose=0)
-    for module in (ae_distances, ae_complexities):
+    for module in modules:
         module.mem = memory
-        for name in dir(module):
-            obj = getattr(module, name)
-            if isinstance(obj, joblib.memory.MemorizedFunc):
-                obj.store_backend = memory.store_backend
+        for _, func in _memoized_funcs(module):
+            func.store_backend = memory.store_backend
 
 
 def _patch_noninteractive():
@@ -197,7 +255,30 @@ def _patch_for_cpu():
     ae_image.torch.compile = lambda module, *a, **kw: module
 
 
-def load(device=None, batch_size=None, num_workers=None):
+def _as_bool(value):
+    """--model-arg values arrive as strings, so accept the usual spellings."""
+    if isinstance(value, bool):
+        return value
+    return str(value).strip().lower() in {"1", "true", "yes", "y", "on"}
+
+
+def _hf_cache_dir():
+    """Where the ~10 GB of autoencoder weights will land, for the load banner."""
+    try:
+        from huggingface_hub.constants import HF_HUB_CACHE
+
+        return HF_HUB_CACHE
+    except Exception:  # older/newer hub layouts — the banner is not worth failing over
+        return os.environ.get("HF_HOME", "~/.cache/huggingface")
+
+
+def load(
+    device=None,
+    batch_size=None,
+    num_workers=None,
+    keep_reconstructions=None,
+    cache_distances=None,
+):
     """Prepare for inference. There is no persistent model object —
     compute_distances() loads the AE pipelines itself, per call.
 
@@ -205,8 +286,13 @@ def load(device=None, batch_size=None, num_workers=None):
     default follows torch.cuda.is_available(), as upstream does.
     batch_size / num_workers: forwarded to compute_distances(), for tuning
     against a particular GPU's memory.
+    keep_reconstructions / cache_distances: keep the two on-disk caches instead
+    of discarding them. Both default to off — see the disk note in the module
+    docstring; together they write ~12 MB per 1024x1024 image, which is what
+    exhausts a cluster quota part-way through a dataset.
     """
-    global _batch_size, _num_workers
+    global _batch_size, _num_workers, _keep_reconstructions, _cache_distances
+    global _run_recon_root
 
     if device is not None and str(device).lower().startswith("cpu"):
         # aeroblade.misc.device() only consults torch.cuda.is_available(), so
@@ -217,19 +303,44 @@ def load(device=None, batch_size=None, num_workers=None):
         _batch_size = int(batch_size)
     if num_workers is not None:
         _num_workers = int(num_workers)
+    if keep_reconstructions is not None:
+        _keep_reconstructions = _as_bool(keep_reconstructions)
+    if cache_distances is not None:
+        _cache_distances = _as_bool(cache_distances)
 
-    _patch_cache_location()
+    _patch_distance_cache(_cache_distances)
     _patch_noninteractive()
 
     resolved = "cuda" if torch.cuda.is_available() else "cpu"
     if resolved == "cpu":
         _patch_for_cpu()
+
+    if _keep_reconstructions:
+        # Stable path, so a later run reuses these instead of recomputing them.
+        _run_recon_root = _RECON_ROOT
+    else:
+        # Private to this process, so deleting it after each shard cannot pull
+        # the ground out from under another aeroblade job on the same node.
+        _run_recon_root = _RECON_ROOT / f"run_{os.getpid()}"
+        atexit.register(shutil.rmtree, _run_recon_root, True)
+    _run_recon_root.mkdir(parents=True, exist_ok=True)
+
     print(
         f"[aeroblade] device={resolved} batch_size={_batch_size} "
         f"num_workers={_num_workers} autoencoders={len(AUTOENCODERS)}"
     )
-
-    _RECON_ROOT.mkdir(parents=True, exist_ok=True)
+    kept = [
+        name
+        for name, on in (("reconstructions", _keep_reconstructions), ("distances", _cache_distances))
+        if on
+    ]
+    growth = (
+        "discarding both caches, ~0 GB growth"
+        if not kept
+        else f"KEEPING {' + '.join(kept)} — grows ~{6.1 * len(kept):.1f} MB per 1024px image per AE"
+    )
+    print(f"[aeroblade] disk: {growth}")
+    print(f"[aeroblade] weights cache: {_hf_cache_dir()} (~10 GB; set HF_HOME to move it)")
 
 
 def result_stem():
@@ -270,19 +381,34 @@ def predict_batch(shard_dir):
 
     Returns: {filename: {"score": raw_max_distance, <ae_short_name>: raw_distance, ...}}
     """
+    if _run_recon_root is None:
+        raise RuntimeError("Call load() before scoring.")
+
     distances = compute_distances(
         dirs=[Path(shard_dir)],
         transforms=["clean"],
         repo_ids=AUTOENCODERS,
         distance_metrics=[DISTANCE_METRIC],
         amount=None,
-        reconstruction_root=_RECON_ROOT,
+        reconstruction_root=_run_recon_root,
         seed=SEED,
         batch_size=_batch_size,
         num_workers=_num_workers,
         compute_max=True,
     )
-    return _extract_scores(distances)
+    results = _extract_scores(distances)
+
+    if not _keep_reconstructions:
+        # The distances are extracted by now, so the reconstructed PNGs (one per
+        # image per autoencoder, ~1.5 MB each at 1024x1024) have served their
+        # purpose. Dropping them per shard is what keeps a dataset-sized run
+        # flat on disk instead of growing by ~3 GB per 1000-image shard. The
+        # cost is that re-running recomputes them on the GPU; pass
+        # --model-arg keep_reconstructions=true when that trade is wrong.
+        shutil.rmtree(_run_recon_root, ignore_errors=True)
+        _run_recon_root.mkdir(parents=True, exist_ok=True)
+
+    return results
 
 
 def _info_for(image_path):
