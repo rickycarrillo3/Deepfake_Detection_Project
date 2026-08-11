@@ -4,7 +4,7 @@ Grag2021_latent model adapter — implements the models/<model_name>/ contract:
     predict(image_path)       -> float in [0, 1], predicted fake-probability
 
 Wraps grip-unina/DMimageDetection (vendored in ../dmimagedetection/,
-shared with the sibling grag2021_progan/ model — both variants use the
+shared with the sibling DMimageDetection_GAN/ model — both variants use the
 same clone and the same downloaded weights zip), specifically
 test_code/get_method_here.py's get_method_here()/def_model() and
 test_code/normalization.py's get_list_norm(), which is what
@@ -12,7 +12,7 @@ test_code/main.py itself calls. (The repo's inference code lives under
 test_code/, not the repo root — training_code/ and docs/ are siblings.)
 
 This is one of two variants of the same architecture trained on
-different data — see ../grag2021_progan/ for the sibling ('Grag2021_progan',
+different data — see ../DMimageDetection_GAN/ for the sibling ('Grag2021_progan',
 trained on ProGAN outputs vs. this one's latent-diffusion training).
 Kept as separate model directories since they're independent detectors
 worth correlating separately, not one model with two settings.
@@ -125,4 +125,4 @@ def result_stem():
     """Optional runner contract (see run.py): the '<model>_<family>' middle of
     the results filename. This DMImageDetection checkpoint was trained on
     latent-diffusion (Stable Diffusion) images."""
-    return "dmimagedetection_DM"
+    return "DMimageDetection_DM"

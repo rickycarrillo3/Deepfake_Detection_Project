@@ -18,7 +18,7 @@ There is **no per-model `run.py`** — the top-level `run.py` runs every model. 
 "Adding a model" below.
 
 Note the mapping is not strictly one directory per detector:
-`models/DMimageDetection/` holds two detectors (`grag2021_latent`, `grag2021_progan`) in
+`models/DMimageDetection/` holds two detectors (`DMimageDetection_DM`, `DMimageDetection_GAN`) in
 subdirectories, sharing one venv and one weights download.
 
 ## Per-model isolation

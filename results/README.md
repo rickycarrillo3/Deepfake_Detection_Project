@@ -19,7 +19,7 @@ a `result_stem()` fall back to just `<model_name>` (no family). Examples:
 
 ```
 ffhq_test_freqnet_GAN_predictions.csv
-flux_test_grag2021_latent_DM_predictions.csv
+flux_test_DMimageDetection_DM_predictions.csv
 ffhq_test_rine1_DM_predictions.csv
 flux_test_co-spy_sd-v1_4_DM_predictions.csv
 ```

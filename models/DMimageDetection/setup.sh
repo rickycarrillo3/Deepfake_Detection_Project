@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Sets up the shared environment for models/DMimageDetection/, used by both
-# grag2021_progan/ and grag2021_latent/.
+# DMimageDetection_GAN/ and DMimageDetection_DM/.
 # Run from inside models/DMimageDetection/:
 #   cd models/DMimageDetection && bash setup.sh
 
@@ -75,5 +75,5 @@ fi
 
 echo ""
 echo "Setup complete. Run either variant with:"
-echo "  models/DMimageDetection/venv/bin/python run.py --model grag2021_progan --dataset <dataset_name>"
-echo "  models/DMimageDetection/venv/bin/python run.py --model grag2021_latent  --dataset <dataset_name>"
+echo "  models/DMimageDetection/venv/bin/python run.py --model DMimageDetection_GAN --dataset <dataset_name>"
+echo "  models/DMimageDetection/venv/bin/python run.py --model DMimageDetection_DM  --dataset <dataset_name>"

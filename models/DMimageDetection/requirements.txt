@@ -1,4 +1,4 @@
-# Shared by both grag2021_progan/ and grag2021_latent/ (same architecture,
+# Shared by both DMimageDetection_GAN/ and DMimageDetection_DM/ (same architecture,
 # same preprocessing deps). get_method_here.py / networks/networks/resnet_mod.py
 # only need torch + numpy at inference time.
 torch
