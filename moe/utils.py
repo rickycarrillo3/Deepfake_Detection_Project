@@ -48,7 +48,7 @@ def load_checkpoint(
             checkpoint["optimizer"]
         )
 
-    return checkpoint["epoch"]
+    return checkpoint
 
 
 def compute_metrics(

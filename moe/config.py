@@ -8,8 +8,6 @@ CSV_PATH = "moe_data/data.csv"
 TRAIN_CSV_PATH = "moe_data/train.csv"
 TEST_CSV_PATH = "moe_data/test.csv"
 
-TTS_SEED = None
-
 IMAGE_ROOT = "moe_data/images"
 
 #########################################
@@ -49,6 +47,9 @@ DEVICE = (
     else "cpu"
 )
 
+PATIENCE = 5
+
+
 #########################################
 # CHECKPOINTS
 #########################################
@@ -57,14 +58,14 @@ CHECKPOINT_DIR = "checkpoints"
 
 SAVE_NAME = "best_model.pt"
 
-# Validation split
+#########################################
+# SPLITS
+#########################################
 VAL_SPLIT = 0.2
 
-# Testing split
 TEST_SPLIT = 0.3
 
-# Training
-PATIENCE = 5
+TTS_SEED = None
 
 # Image preprocessing
 ## IMAGE_SIZE = 224

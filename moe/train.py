@@ -23,7 +23,8 @@ from models import (
 from utils import (
     save_checkpoint,
     compute_metrics,
-    ensure_dir
+    ensure_dir,
+    load_checkpoint
 )
 
 
@@ -35,6 +36,7 @@ import config
 # -----------------------------
 
 from models import CNNEncoder
+
 
 def create_model():
 
@@ -58,9 +60,7 @@ def create_model():
 
 
     return model
-
-
-
+    
 # -----------------------------
 # Training epoch
 # -----------------------------
@@ -278,7 +278,7 @@ def main():
 
 
     dataset = ExpertDataset(
-        config.TRAIN_CSV_PATH,
+        config.CSV_PATH,
         config.IMAGE_ROOT,
         transform
     )
@@ -348,13 +348,35 @@ def main():
 
 
 
-    best_loss = float("inf")
+    checkpoint_path = os.path.join(
+    config.CHECKPOINT_DIR,
+    config.SAVE_NAME)
 
+    if os.path.exists(checkpoint_path):
+        print(f"Loading checkpoint: {checkpoint_path}")
+        saved_epoch = load_checkpoint(
+            checkpoint_path,
+            model,
+            optimizer)["epoch"]
+        start_epoch = saved_epoch + 1
+        print(
+            f"Resuming from epoch {start_epoch + 1}"
+        )
+
+    else:
+        print(
+            "No checkpoint found. Starting from scratch."
+        )
+        start_epoch = 0
+        
+    best_loss = float("inf")
     patience_counter = 0
+    
 
 
 
     for epoch in range(
+        start_epoch,
         config.EPOCHS
     ):
 

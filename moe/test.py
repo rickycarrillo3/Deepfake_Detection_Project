@@ -16,6 +16,7 @@ from models import (
 
 from utils import (
     compute_metrics,
+    load_checkpoint
 )
 
 
@@ -44,37 +45,6 @@ def create_model():
     return model
 
 
-# --------------------------------------------------
-# Load checkpoint
-# --------------------------------------------------
-
-def load_checkpoint(
-    model,
-    checkpoint_path
-):
-
-    checkpoint = torch.load(
-        checkpoint_path,
-        map_location=config.DEVICE
-    )
-
-    # Handles the checkpoint format used by
-    # save_checkpoint() if it stores model_state_dict.
-
-    if "model_state_dict" in checkpoint:
-
-        model.load_state_dict(
-            checkpoint["model_state_dict"]
-        )
-
-    else:
-
-        # If the checkpoint itself is the state_dict
-        model.load_state_dict(
-            checkpoint
-        )
-
-    return model
 
 
 # --------------------------------------------------
@@ -252,9 +222,9 @@ def main():
     )
 
 
-    model = load_checkpoint(
+    load_checkpoint(
+        checkpoint_path,
         model,
-        checkpoint_path
     )
 
 
