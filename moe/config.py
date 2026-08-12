@@ -69,7 +69,7 @@ TTS_SEED = None
 
 # Image preprocessing
 ## IMAGE_SIZE = 224
-IMAGE_SIZE = 512
+IMAGE_SIZE = 1024
 
 
 # Logging

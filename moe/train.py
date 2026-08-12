@@ -278,7 +278,7 @@ def main():
 
 
     dataset = ExpertDataset(
-        config.CSV_PATH,
+        config.TRAIN_CSV_PATH,
         config.IMAGE_ROOT,
         transform
     )
