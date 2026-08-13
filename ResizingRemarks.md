@@ -13,8 +13,15 @@ resolution**, and for a fully-convolutional net the compute scales linearly
 with pixel count. A 1024×1024 image is ~21× the pixels of 224×224, so a model
 you would expect to be among the fastest becomes among the slowest.
 
-Five of the nine detectors bound their input to 224–384; three run at native
-resolution and pay for it in proportion to image size.
+Five of the nine detectors **under `models/`** bound their input to 224–384; the rest run at
+native resolution and pay for it in proportion to image size.
+
+Scope: this note predates `baselines/` and covers only `models/`. The six TrueFake baselines have
+the same split for the same reason — five score at native resolution, CLIP-D resizes to 224 and
+MISLNet takes 96×96 patches — documented in
+[`baselines/README.md`](baselines/README.md#preprocessing-no-resize). Note also that `run.py`'s
+`--resize N` now applies on top of whatever a model does below, and every CSV records which regime
+produced it; the table here describes the default (no `--resize`) behavior.
 
 ## Bounded input — cost is resolution-independent
 

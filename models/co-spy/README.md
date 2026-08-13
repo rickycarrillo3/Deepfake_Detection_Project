@@ -63,9 +63,24 @@ model.load()
 score = model.predict("/path/to/image.png")  # float in [0, 1]
 ```
 
-Or run a full shard-based evaluation against `data/<dataset_name>/`, writing to
-`results/co-spy/<dataset_name>.csv`:
+Or run a full shard-based evaluation against `data/<dataset_name>/` through the shared runner:
 
 ```
 models/co-spy/venv/bin/python run.py --model co-spy --dataset flux_faces --model-arg train_dataset=sd-v1_4
 ```
+
+## Checkpoints and output naming
+
+`train_dataset` selects the checkpoint set and, with it, the generation family in the output
+filename — `result_stem()` returns `co-spy_GAN` for `progan` and `co-spy_DM` for anything else
+(`sd-v1_4`, …). So the two runs land in separate CSVs:
+
+```
+results/flux_faces_co-spy_GAN_predictions.csv    # --model-arg train_dataset=progan
+results/flux_faces_co-spy_DM_predictions.csv     # --model-arg train_dataset=sd-v1_4
+```
+
+Note the checkpoint name itself does not appear — the family is what separates them. Both are
+listed in `VARIANT_ARGS` in the top-level `run.py`, so a sweep (`--all` / `--models co-spy`) runs
+each without needing the flag spelled out. Schema in
+[`results/README.md`](../../results/README.md).

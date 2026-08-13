@@ -53,9 +53,16 @@ model.load()
 score = model.predict("/path/to/image.png")  # float in [0, 1], fake-probability
 ```
 
-Or run a full shard-based evaluation against `data/<dataset_name>/`, writing to
-`results/grag2021/<dataset_name>.csv`:
+Or run a full shard-based evaluation against `data/<dataset_name>/` through the shared runner:
 
 ```
 models/grag2021/venv/bin/python run.py --model grag2021 --dataset flux_faces
 ```
+
+Grag2021 was trained on GAN-generated images, so its `result_stem()` is `grag2021_GAN` and the run
+writes `results/flux_faces_grag2021_GAN_predictions.csv` — schema in
+[`results/README.md`](../../results/README.md).
+
+Not to be confused with [`models/DMimageDetection/`](../DMimageDetection/README.md): same lab and
+overlapping co-authors, but a different repo (grip-unina/DMimageDetection), a different paper
+(Corvi et al., ICASSP 2023) and different weights.

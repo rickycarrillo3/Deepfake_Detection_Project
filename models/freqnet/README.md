@@ -35,9 +35,12 @@ model.load()
 score = model.predict("/path/to/image.png")  # float in [0, 1], fake-probability
 ```
 
-Or run a full shard-based evaluation against `data/<dataset_name>/`, writing to
-`results/freqnet/<dataset_name>.csv`:
+Or run a full shard-based evaluation against `data/<dataset_name>/` through the shared runner:
 
 ```
 models/freqnet/venv/bin/python run.py --model freqnet --dataset flux_faces
 ```
+
+FreqNet was trained on GAN-generated images, so its `result_stem()` is `freqnet_GAN` and the run
+writes `results/flux_faces_freqnet_GAN_predictions.csv` — schema in
+[`results/README.md`](../../results/README.md).

@@ -39,6 +39,14 @@ Run from the repo root, using this model's venv:
 models/cnndetection/venv/bin/python run.py --model cnndetection --dataset <dataset_name>
 ```
 
+CNNDetection was trained on GAN-generated images, so its `result_stem()` is `cnndetection_GAN`
+and the run writes `results/<dataset_name>_cnndetection_GAN_predictions.csv` — schema in
+[`results/README.md`](../../results/README.md).
+
+Because `CROP_SIZE = None` by default, this ResNet-50 runs over the image at **native
+resolution**, so its cost scales with pixel count — it and `DMimageDetection` are the slow ones on
+large inputs. See [`ResizingRemarks.md`](../../ResizingRemarks.md).
+
 Single image from the terminal:
 ```bash
 cd models/cnndetection

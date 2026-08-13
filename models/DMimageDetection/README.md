@@ -52,6 +52,20 @@ models/DMimageDetection/venv/bin/python run.py --model DMimageDetection_GAN --da
 models/DMimageDetection/venv/bin/python run.py --model DMimageDetection_DM  --dataset <dataset_name>
 ```
 
+Each `result_stem()` is just the registry name — it already carries the family — so the runs write
+`results/<dataset_name>_DMimageDetection_GAN_predictions.csv` and
+`..._DMimageDetection_DM_predictions.csv`. Schema in
+[`results/README.md`](../../results/README.md).
+
+Both run the fully-convolutional ResNet-50 at **native resolution** (no resize, no crop), so their
+cost scales with pixel count — a 1024² image is ~21× the pixels of 224², which is why they feel
+heavy for a ResNet. That behavior is load-bearing, not an oversight: downsampling would destroy
+the high-frequency cues the method keys on. See [`ResizingRemarks.md`](../../ResizingRemarks.md).
+
+Because both models share one venv and one clone, a sweep cleans that shared directory up **once
+at the very end** rather than after either model individually — deleting it after the first would
+break the second's run (`SHARED_CLONE_ROOTS` / `SHARED_VENV_ROOTS` in the top-level `run.py`).
+
 Single image from the terminal (either variant):
 ```bash
 cd models/DMimageDetection/DMimageDetection_GAN
