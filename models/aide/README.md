@@ -5,62 +5,53 @@ Wrapper around [`shilinyan99/AIDE`](https://github.com/shilinyan99/AIDE), ported
 
 This implementation follows the repository contract:
 
-- `load()` loads the model/checkpoint and prepares inference.
+- `load(**kwargs)` loads the model/checkpoint and prepares inference.
 - `predict(image_path) -> score` returns a fake-probability score in `[0, 1]`.
-- The shared top-level `run.py` writes `results/aide/<dataset_name>.csv` with exactly:
+- `result_stem()` names the output file after the checkpoint's generation family (below).
 
-```csv
-filepath,score,label
-```
-
-For fake-only datasets, the label should be `1`. The shared loader should already assign `1` to
-datasets whose folder name does not contain `ffhq`; you can also force this with `--force-label 1`.
+The shared top-level `run.py` writes the standard schema documented in
+[`results/README.md`](../../results/README.md) — `filepath`, `score`, `Predicted label`, `resize`.
+There is **no `label` column**: ground truth is recoverable from the dataset name (contains `ffhq`
+→ real, else fake) and is used only for the console accuracy line. `--force-label 0|1` overrides
+that rule for a run whose folder name doesn't follow it.
 
 ## Setup
 
-From the repository root:
-
 ```bash
-mkdir -p models/aide
-git clone https://github.com/shilinyan99/AIDE.git models/aide/AIDE
-
-python -m venv models/aide/venv
-source models/aide/venv/bin/activate
-
-# Install torch/torchvision separately for your CUDA version first.
-# Example:
-# pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
-
-pip install -r models/aide/requirements.txt
+cd models/aide && bash setup.sh
 ```
 
-## Checkpoint
+`setup.sh` clones upstream to `AIDE/`, builds `venv/` with an overridable interpreter
+(`PYTHON=python3.12 ./setup.sh` on a cluster), installs `requirements.txt` plus torch/torchvision,
+and pulls the pretrained checkpoints from the AIDE authors' Google Drive folder into
+`AIDE/checkpoints/` with `gdown`. Skip that last step with
+`SKIP_CHECKPOINT_DOWNLOAD=1 ./setup.sh`; if Drive rate-limits the download, the script prints the
+`gdown --folder ...` command to re-run by hand.
 
-By default, `model.py` looks for:
+## Checkpoints
 
-```text
-models/aide/AIDE/checkpoints/GenImage_train.pth
-```
+AIDE ships three detector checkpoints, trained on different fake-image sources. Pick one with
+`--model-arg checkpoint=<name>`:
 
-Create the checkpoint folder:
+| `checkpoint` | file | trained on | result stem |
+|---|---|---|---|
+| `genimage` (default) | `GenImage_train.pth` | GenImage (mixed generators) | `aide_genimage` |
+| `progan` | `progan_train.pth` | ProGAN | `aide_GAN` |
+| `sd14` | `sd14_train.pth` | Stable Diffusion 1.4 | `aide_DM` |
 
-```bash
-mkdir -p models/aide/AIDE/checkpoints
-```
+`genimage` keeps its own literal label rather than being forced into `GAN`/`DM`, because a mixed
+generator set is neither. The differing stems also keep the three checkpoints' runs in separate
+CSVs; all three are listed in `VARIANT_ARGS` in the top-level `run.py`, so a sweep (`--all` /
+`--models aide`) runs each of them.
 
-Then download/place an AIDE detector checkpoint there. The uploaded Colab used `GenImage_train.pth`
-from the AIDE model-zoo folder. If you save it somewhere else, set:
-
-```bash
-export AIDE_WEIGHTS_PATH=/absolute/path/to/your_checkpoint.pth
-```
-
-or pass it directly:
+To use a checkpoint from elsewhere, give a full path — it overrides `checkpoint=` entirely:
 
 ```bash
 models/aide/venv/bin/python run.py --model aide --dataset flux_faces \
   --model-arg checkpoint_path=/absolute/path/to/your_checkpoint.pth
 ```
+
+`AIDE_WEIGHTS_PATH=/absolute/path/to/checkpoint.pth` in the environment does the same thing.
 
 ## Model convention
 
@@ -95,28 +86,29 @@ print(score)
 Full dataset run:
 
 ```bash
-models/aide/venv/bin/python run.py --model aide --dataset flux_faces --force-label 1
+models/aide/venv/bin/python run.py --model aide --dataset flux_faces
 ```
 
 Quick smoke test:
 
 ```bash
-models/aide/venv/bin/python run.py --model aide --dataset flux_faces --force-label 1 --limit 10
+models/aide/venv/bin/python run.py --model aide --dataset flux_faces --limit 10
 ```
 
-The main output CSV will be:
+With the default `genimage` checkpoint that writes:
 
 ```text
-results/aide/flux_faces.csv
+results/flux_faces_aide_genimage_predictions.csv
 ```
 
-with only these columns:
+with these columns:
 
 ```text
-filepath,score,label
+filepath,score,Predicted label,resize
 ```
 
-No timing summary is written — see `results/README.md` for why.
+No per-run timing CSV is written — the run's duration is appended to `results/run_log.csv`
+instead. See [`results/README.md`](../../results/README.md) for why.
 
 ## Notes
 

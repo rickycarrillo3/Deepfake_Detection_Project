@@ -1,6 +1,27 @@
 # models/
 
-Holds one subdirectory per pretrained deepfake detector under test.
+Holds one subdirectory per pretrained deepfake detector under test, using the **original authors'**
+checkpoints. (The six detectors retrained by the TrueFake paper's authors live in
+[`baselines/`](../baselines/README.md) instead, `tf-` prefixed — same contract, different
+provenance.)
+
+## The nine detectors
+
+| registry name | dir | upstream |
+|---|---|---|
+| `freqnet` | `freqnet/` | chuangchuangtan/FreqNet-DeepfakeDetection — frequency-domain CNN |
+| `grag2021` | `grag2021/` | grip-unina/GANimageDetection (Gragnaniello et al., ICME 2021) |
+| `cnndetection` | `cnndetection/` | PeterWang512/CNNDetection (Wang et al., CVPR 2020) |
+| `co-spy` | `co-spy/` | Megum1/CO-SPY — semantic + artifact + fusion |
+| `aide` | `aide/` | shilinyan99/AIDE |
+| `rine` | `rine/` | mever-team/rine — intermediate CLIP encoder blocks |
+| `DMimageDetection_DM` | `DMimageDetection/DMimageDetection_DM/` | grip-unina/DMimageDetection (Corvi et al., ICASSP 2023), latent-diffusion checkpoint |
+| `DMimageDetection_GAN` | `DMimageDetection/DMimageDetection_GAN/` | same repo, ProGAN checkpoint |
+| `aeroblade` | `aeroblade/` | jonasricker/aeroblade (CVPR 2024) — training-free reconstruction error |
+
+`grag2021` and `DMimageDetection` are easy to conflate: same lab and overlapping co-authors, but
+different repos, papers and weights. The upstream checkpoint keys `Grag2021_progan` /
+`Grag2021_latent` stay in each `DMimageDetection` `model.py`'s `MODEL_NAME` — do not rename them.
 
 ## Layout
 
@@ -64,13 +85,55 @@ working directory — `run.py` imports it from the repo root.
 Anything model-specific that `load()` needs (a checkpoint path, a weight variant) is passed through
 from the command line with `--model-arg key=value`, so the runner never needs to know what it means.
 
+## Naming the output — `result_stem()`
+
+A `model.py` may also define a module-level `result_stem()`, called with no arguments **after**
+`load()`. It returns the `<model>_<family>` middle of the output filename
+(`results/<dataset>_<stem>_predictions.csv`), which is how the generation family a detector was
+trained on reaches the CSV name — and how a model whose `--model-arg` meaningfully changes its
+weights keeps those runs in separate files now that all results share one flat directory:
+
+```python
+def result_stem():
+    if _DEFAULT_MODEL is None:
+        raise RuntimeError("Call load() before result_stem().")
+    family = "GAN" if _DEFAULT_MODEL.train_dataset == "progan" else "DM"
+    return f"co-spy_{family}"
+```
+
+Every model registered today defines one; a model that doesn't falls back to a bare
+`<model_name>`. Because it runs after `load()`, it can read whatever `load()` resolved. See
+`results/README.md` for the full stem-per-model table.
+
+## Models with several checkpoints
+
+When one model ships more than one meaningfully-different weight set, list those `--model-arg`
+combinations in `VARIANT_ARGS` in the top-level `run.py` so a sweep (`--all` / `--baselines` /
+`--models`) runs each of them rather than only the default. Registered today:
+
+| model | variants |
+|---|---|
+| `co-spy` | `train_dataset=progan`, `sd-v1_4` |
+| `aide` | `checkpoint=genimage`, `progan`, `sd14` |
+| `rine` | `ncls=ldm`, `1`, `2`, `4` |
+
+Their `result_stem()`s must differ across those variants, or the runs overwrite each other's CSVs.
+A model absent from `VARIANT_ARGS` simply runs once with no extra args.
+
 ## Adding a model
 
 1. Write `models/<model_name>/model.py` exposing `load()` / `predict()` as above.
 2. Write `models/<model_name>/setup.sh` (clone upstream, build the venv, fetch weights). Build the
    venv with an overridable interpreter — `PYTHON="${PYTHON:-python3}"` — so a cluster's
    module-loaded Python can be used; do not hardcode one.
-3. Add one line to the `MODELS` registry in the top-level `run.py`.
+3. Add one line to the `MODELS` registry in the top-level `run.py` (plus a `VARIANT_ARGS` entry if
+   the detector ships several checkpoints).
+
+Check it end to end with a short run before turning it loose on a full dataset:
+
+```bash
+models/<model_name>/venv/bin/python run.py --model <model_name> --dataset ffhq_test --limit 10
+```
 
 That's it — do not write a `run.py`. The per-model runners used to be copy-pasted near-duplicates
 that drifted apart and had to be bug-fixed one by one; they were consolidated deliberately.

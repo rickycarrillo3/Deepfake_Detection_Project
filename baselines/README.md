@@ -84,6 +84,32 @@ baselines/NPR/venv/bin/python run.py --model tf-npr --dataset ffhq_test
 `setup.sh` does **not** fetch checkpoints — they were provided directly by the
 authors and are not publicly hosted. Drop each `best.pt` into its directory.
 
+To sweep all six against one dataset in a single command — each re-exec'd under
+its own venv, then cleaned up — use `--baselines` (launch it with a plain
+`python3` that has pandas + tqdm, not one of the baselines' own venvs):
+
+```bash
+python3 run.py --baselines --dataset ffhq_test
+python3 run.py --baselines --dataset ffhq_test --dry-run   # check the plan first
+```
+
+`--models tf-npr,tf-clipd` does the same for a named subset. The group is
+derived from the `MODELS` registry by directory, so there is no second list to
+fall out of sync, and cleanup is limited to what actually ran.
+
+## Output naming
+
+All six share one `result_stem()` shape: `tf-<name>_GANDM`, e.g.
+
+```
+results/ffhq_test_tf-npr_GANDM_predictions.csv
+```
+
+`GANDM` rather than `GAN` or `DM` because the authors' training split spans
+**both** families (StyleGAN2 fakes *and* SDXL fakes) — that is exactly the
+shared provenance described above, so it belongs in the filename. Schema is the
+project standard; see [`results/README.md`](../results/README.md).
+
 ## A note on P2G's interpreter
 
 Five baselines build against current torch. P2G needs an older one, so it is the

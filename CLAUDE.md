@@ -103,13 +103,16 @@ Data flows: `data/` (raw image shards) → `loaders/` (yield `(image_path, label
 
 - **`results/<dataset_name>_<model_name>_<generation_family>_predictions.csv`** — all results
   live in one flat `results/` directory; the filename carries the dataset, model, and the
-  generation family the detector was trained on (`GAN`/`DM`). The `<model>_<family>` middle comes
+  generation family the detector was trained on (`GAN`/`DM`, or `GANDM` for the six baselines,
+  whose shared split spans both). The `<model>_<family>` middle comes
   from each model.py's optional module-level `result_stem()` (see `run.py`); models without it fall
-  back to just `<model_name>` (no family). For checkpoint-varying detectors the stem also encodes
-  the checkpoint so runs don't collide: co-spy's family follows `train_dataset` (progan→GAN,
-  else→DM), aide's follows `checkpoint` (progan→GAN, sd14→DM, genimage kept literal), and rine
-  (always trained on latent-diffusion data, so family `DM`) puts its `ncls` in the model slot —
-  `rineldm`, `rine1`, `rine2`, `rine4`. `aeroblade` gets no family suffix
+  back to just `<model_name>` (no family), though every registered model defines one today. For
+  checkpoint-varying detectors the differing family is what keeps runs from colliding: co-spy's
+  follows `train_dataset` (progan→`co-spy_GAN`, else→`co-spy_DM`; the checkpoint name itself is not
+  in the stem), aide's follows `checkpoint` (progan→GAN, sd14→DM, genimage kept literal), and
+  rine's follows `ncls` — the latent-diffusion checkpoint is `rine_DM`, while the ProGAN-trained
+  1/2/4-class ones put their `ncls` in the model slot as `rine1_GAN`, `rine2_GAN`, `rine4_GAN`.
+  `aeroblade` gets no family suffix
   (`<dataset_name>_aeroblade_predictions.csv`) — training-free, so there is no family it was
   trained on. Output schema is `filepath` (string,
   dataset-relative, e.g. `shard_01/00042.png`; unambiguous alongside the CSV's own

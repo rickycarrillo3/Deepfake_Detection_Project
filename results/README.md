@@ -12,20 +12,32 @@ results/<dataset_name>_<model_name>_<generation_architecture>_predictions.csv
 ```
 
 The `<model_name>_<generation_architecture>` middle is the model's `result_stem()` (see
-`run.py`): the generation family the detector was trained on — `GAN` or `DM` — and, for
-checkpoint-varying detectors, whatever distinguishes their checkpoints so runs don't collide
-(co-spy's `train_dataset`, aide's `checkpoint`, rine's `ncls` in the model slot). Models without
-a `result_stem()` fall back to just `<model_name>` (no family). Examples:
+`run.py`): the generation family the detector was trained on. Every registered model defines one
+today; the runner's fallback to a bare `<model_name>` (no family) exists for one that doesn't.
+
+| model | stem(s) | notes |
+|---|---|---|
+| `freqnet`, `grag2021`, `cnndetection` | `freqnet_GAN`, `grag2021_GAN`, `cnndetection_GAN` | fixed family |
+| `DMimageDetection_GAN` / `_DM` | same as the registry name | the name already carries the family |
+| `co-spy` | `co-spy_GAN`, `co-spy_DM` | follows `--model-arg train_dataset` (progan → GAN, anything else → DM) |
+| `aide` | `aide_GAN`, `aide_DM`, `aide_genimage` | follows `--model-arg checkpoint` (progan → GAN, sd14 → DM, genimage kept literal — it is a mixed-generator training set) |
+| `rine` | `rine_DM`, `rine1_GAN`, `rine2_GAN`, `rine4_GAN` | follows `--model-arg ncls`: the `ldm` checkpoint is diffusion-trained, the 1/2/4-class ones are ProGAN-trained, and their `ncls` sits in the model slot so the four don't overwrite each other |
+| `aeroblade` | `aeroblade` | no family suffix — training-free, so there is none it was trained on |
+| the six `tf-*` baselines | `tf-npr_GANDM`, `tf-clipd_GANDM`, … | all six were retrained by the TrueFake authors on one split spanning **both** families (StyleGAN2 + SDXL) |
+
+Examples:
 
 ```
 ffhq_test_freqnet_GAN_predictions.csv
 flux_test_DMimageDetection_DM_predictions.csv
-ffhq_test_rine1_DM_predictions.csv
-flux_test_co-spy_sd-v1_4_DM_predictions.csv
+ffhq_test_rine1_GAN_predictions.csv
+ffhq_test_tf-npr_GANDM_predictions.csv
+flux_test_aeroblade_predictions.csv
 ```
 
-`aeroblade` gets no family suffix (`<dataset_name>_aeroblade_predictions.csv`): it is
-training-free, so there is no generation family it was trained on.
+For the checkpoint-varying models the family is what keeps runs from colliding, so it is
+load-bearing in the filename rather than decoration: co-spy's two checkpoints land in
+`co-spy_GAN` and `co-spy_DM`, and the checkpoint name itself (`sd-v1_4`) never appears.
 
 ## CSV schema
 
@@ -86,6 +98,19 @@ within a set of runs you know shared those, not across the file at large.
 
 Timing stays out of the **predictions** CSVs, whose schema is strictly per-image. Keep it that
 way — the separate file is what stops a duration from being read as a per-image column.
+
+## What else lands here
+
+The predictions CSVs and `run_log.csv` are what `run.py` writes. The analysis scripts at the repo
+root read those back and write their own output into this directory too:
+
+| path | written by | contents |
+|---|---|---|
+| `results/auroc_summary.csv` | `auroc_report.py` | one row per (real dataset, fake dataset, model): `auroc`, `accuracy`, `real_acc`, `fake_acc`, `n_real`, `n_fake`, `resize`. `--no-csv` prints only; `--out` redirects it |
+| `results/plots/<dataset>/` | `failure_correlation.py` | `combined_vectors.csv` plus the per-dataset correlation matrices and their plots |
+| `<dir>/<dataset>_ensemble.csv` | `ensemble.py --out DIR` | per-image combined scores; nothing is written without `--out` |
+
+All three are git-ignored along with everything else here.
 
 ## Git
 
