@@ -1,2 +1,4 @@
-CNNDetection/
+# The vendored clone (CNNDetection/) is ignored from the root .gitignore,
+# with every other model's, so coverage can be checked in one place.
+# This venv name is not one of the root file's models/*/{venv,.venv,env}/ forms.
 cnndetection_env/

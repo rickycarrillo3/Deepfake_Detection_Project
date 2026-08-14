@@ -190,6 +190,12 @@ Data flows: `data/` (raw image shards) → `loaders/` (yield `(image_path, label
 - `data/`, `results/` contents, model weight files (`*.pth`, `*.pt`, `*.onnx`, `*.h5`, `*.ckpt`,
   `*.safetensors`), vendored upstream clones, and per-model `venv/`/`.venv/`/`env/` directories are
   git-ignored — do not try to commit these.
+- **Every** vendored clone is ignored from the *one* vendored-clone block in the root `.gitignore`,
+  never from a per-model `.gitignore`. Splitting them is what let `models/aide/AIDE/` sit
+  unignored: adding a detector only updates whichever file you remember to open. Adding a model
+  means adding its `git clone ... <target>` path to that block; the per-model files are now only
+  for things the root patterns genuinely miss (the `*_env/` venvs, `aeroblade_output/`,
+  rine's `ckpt`).
 - Keep model environments isolated per-directory; do not introduce a shared top-level
   requirements file that would force version alignment across models. `run.py` depends only on
   `pandas` + `tqdm`, which every model venv already has, so it runs under each model's interpreter

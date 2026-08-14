@@ -28,17 +28,29 @@ models/*/venv/
 models/*/.venv/
 models/*/env/
 
-# Vendored clones of each model's upstream GitHub repo
+# Vendored clones of each model's upstream GitHub repo. Every clone target is
+# listed here, in one block, so checking coverage means reading one list rather
+# than five files. Splitting these between here and per-model .gitignore files
+# is what let models/aide/AIDE/ go untracked-but-not-ignored: adding a detector
+# only updates the file you remember to open. Each entry matches the target of
+# that model's `git clone ... <target>` in its setup.sh — keep them in sync.
+models/DMimageDetection/dmimagedetection/
+models/aeroblade/aeroblade/
+models/aide/AIDE/
+models/cnndetection/CNNDetection/
 models/co-spy/CO-SPY/
-models/grag2021/GANimageDetection/
 models/freqnet/FreqNet-DeepfakeDetection/
+models/grag2021/GANimageDetection/
+models/rine/rine/
 
 # TrueFake baselines (baselines/) — one isolated venv per baseline, as in models/
 baselines/*/venv/
 baselines/*/.venv/
 
 # Vendored clones for the baselines. grip-unina's repo is cloned into both
-# R50_nodown/ and CLIP-D/, which import different architectures from it.
+# R50_nodown/ and CLIP-D/, which import different architectures from it. The
+# list is short by two on purpose: R50_TF and MISLNet vendor no clone at all,
+# their architectures being transcribed into baselines/tf_networks.py.
 baselines/*/ClipBased-SyntheticImageDetection/
 baselines/NPR/NPR-DeepfakeDetection/
 baselines/P2G/Prompt2Guard/

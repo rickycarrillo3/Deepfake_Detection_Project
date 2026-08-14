@@ -1,3 +1,10 @@
-rine/
+# The vendored clone (rine/) is ignored from the root .gitignore, with every
+# other model's, so coverage can be checked in one place.
+# This venv name is not one of the root file's models/*/{venv,.venv,env}/ forms.
 rine_env/
+
+# Unanchored, so any ckpt/ appearing under models/rine/ stays out of git —
+# RINE resolves "ckpt/" relative to the CWD, so one can show up here depending
+# on where the model is invoked from. (setup.sh's own symlink is at the repo
+# root, covered by the anchored /ckpt there.)
 ckpt
