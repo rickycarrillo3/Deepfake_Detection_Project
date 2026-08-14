@@ -1,3 +1,9 @@
-aeroblade/
-venv/
+# The vendored clone (aeroblade/) is ignored from the root .gitignore, with
+# every other model's, so coverage can be checked in one place. venv/ is
+# covered there too, by models/*/venv/.
+
+# Where model.py points both of aeroblade's caches (reconstructions/, cache/).
+# Empty under the defaults, which discard both; it holds real weight only when
+# keep_reconstructions/cache_distances opt back in, and a crashed run can leave
+# a reconstruction directory behind either way.
 aeroblade_output/

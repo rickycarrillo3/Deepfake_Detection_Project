@@ -290,7 +290,10 @@ Two caveats worth knowing before trusting their output:
    venv with an overridable interpreter (`PYTHON="${PYTHON:-python3}"`) so a cluster's
    module-loaded Python can be used: `module load python/3.12.12 && PYTHON=python3.12 ./setup.sh`.
    Do not hardcode an interpreter.
-3. Add one line to the `MODELS` registry in the top-level `run.py`.
+3. Add the clone target from step 2 to the vendored-clone block in the root `.gitignore`. Every
+   model's clone is listed there, in that one block, so `git status` after a `setup.sh` is the
+   check that you did it.
+4. Add one line to the `MODELS` registry in the top-level `run.py`.
 
 That's it — do **not** write a per-model `run.py`.
 
