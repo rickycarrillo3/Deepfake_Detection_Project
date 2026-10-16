@@ -20,8 +20,8 @@ plots + CSVs into
 results/plots/<dataset>/
 
 Datasets here are a MIX of real and fake DATASETS (not a mix within a single
-CSV) — ffhq is entirely real, every other dataset is entirely fake (see
-REAL_DATASETS below). The CSVs themselves have no label column at all
+CSV) — ffhq is entirely real, every other dataset is entirely fake, per
+loaders.label_for_dataset. The CSVs themselves have no label column at all
 (run.py deliberately doesn't write one), so every metric below derives label
 from which dataset a file came from, not from a per-row value:
 
@@ -40,61 +40,41 @@ combined CSV as a diagnostic, but is no longer what correlations or oracle
 accuracy are computed from.
 """
 
-import re
+import os
+import sys
 from pathlib import Path
+
 import matplotlib.pyplot as plt
 import pandas as pd
+
+REPO_ROOT = os.path.dirname(os.path.abspath(__file__))
+if REPO_ROOT not in sys.path:
+    sys.path.insert(0, REPO_ROOT)
+
+# Discovery and ground truth are shared with the other analysis scripts rather
+# than re-derived here: ensemble.py anchors the <dataset>_<stem>_predictions.csv
+# split on the dataset directory names under data/ (both halves contain
+# underscores, so splitting the filename cannot be done reliably), and
+# label_for_dataset is the same ffhq-substring rule run.py labelled with.
+from ensemble import csv_path, discover_datasets, model_stems_for  # noqa: E402
+from loaders.dataset import label_for_dataset  # noqa: E402
 
 ###############################################################################
 # Configuration
 ###############################################################################
 
-RESULTS_DIR = Path("results")
+# Anchored on this file, not the CWD, so the script works from any directory
+# (as run.py and the other analysis scripts already do).
+RESULTS_DIR = Path(REPO_ROOT) / "results"
 OUTPUT_DIR = RESULTS_DIR / "plots"
 
-# Dataset display-names (after "_faces" is stripped, e.g. "ffhq" not
-# "ffhq_faces") that are all-REAL. Everything else is treated as all-FAKE.
-# The CSVs have no label column at all (run.py deliberately doesn't write
-# one — see its docstring), so this is the only source of ground truth here.
-REAL_DATASETS = {"ffhq"}
-
-# Every dataset filename observed so far ends in "_faces" (ffhq_faces,
-# flux_faces, stylegan-0.5_faces, ...), so that's used as the default split
-# marker between <dataset> and <stem> in DATASET_stem_predictions.csv — both
-# halves can themselves contain underscores, so a plain split-on-underscore
-# can't tell them apart reliably. If you add a dataset whose name does NOT
-# end in "_faces", add its exact <dataset> string here (checked first, before
-# the "_faces" fallback).
-KNOWN_DATASETS = []
-
-# dataset_name (with "_faces" stripped, e.g. "flux" not "flux_faces") ->
-# benchmark accuracy to draw as a reference line on that dataset's accuracy
-# chart. None / absent -> no line drawn.
+# dataset_name -> benchmark accuracy to draw as a reference line on that
+# dataset's accuracy chart. None / absent -> no line drawn. Keys are the
+# dataset directory names under data/, the same names that appear in the CSV
+# filenames.
 BENCHMARK_LINES = {
-    "flux": 0.98,
-    "ffhq": None,
-    "stylegan-0.5": None,
-    "stylegan-0.7": None,
+    "flux_faces": 0.98,
 }
-
-_FILENAME_RE = re.compile(r"^(?P<dataset>.+_faces)_(?P<stem>.+)_predictions\.csv$")
-
-
-def parse_result_filename(fname):
-    """'flux_faces_aide_DM_predictions.csv' -> ('flux_faces', 'aide_DM').
-    Returns (None, None) if fname doesn't match any known pattern (e.g.
-    aeroblade's *_summary.csv, or results/summary.csv at the top level —
-    both deliberately not per-image prediction files)."""
-    for ds in sorted(KNOWN_DATASETS, key=len, reverse=True):
-        prefix = ds + "_"
-        suffix = "_predictions.csv"
-        if fname.startswith(prefix) and fname.endswith(suffix):
-            return ds, fname[len(prefix):-len(suffix)]
-
-    m = _FILENAME_RE.match(fname)
-    if m:
-        return m.group("dataset"), m.group("stem")
-    return None, None
 
 
 ###############################################################################
@@ -102,27 +82,16 @@ def parse_result_filename(fname):
 ###############################################################################
 
 
-def discover_datasets():
-    datasets = {}
-    unparsed = []
+def discover_entries():
+    """dataset_name -> [(model stem, CSV path)], over the flat results/ dir.
 
-    for csv in sorted(RESULTS_DIR.glob("*.csv")):  # flat: only results/ itself, not results/plots/...
-
-        raw_dataset, stem = parse_result_filename(csv.name)
-        if raw_dataset is None:
-            unparsed.append(csv.name)
-            continue
-
-        display_dataset = raw_dataset.replace("_faces", "")
-        datasets.setdefault(display_dataset, []).append((stem, csv))
-
-    if unparsed:
-        print(
-            "Skipping file(s) that don't match <dataset>_<stem>_predictions.csv "
-            f"(add to KNOWN_DATASETS if one of these should be included): {', '.join(unparsed)}\n"
-        )
-
-    return datasets
+    Both discovery and the dataset->stem filename split come from ensemble.py,
+    so all three analysis scripts see exactly the same set of CSVs.
+    """
+    return {
+        dataset: [(stem, Path(csv_path(dataset, stem))) for stem in model_stems_for(dataset)]
+        for dataset in discover_datasets()
+    }
 
 
 ###############################################################################
@@ -130,9 +99,12 @@ def discover_datasets():
 ###############################################################################
 
 
-def build_combined(display_dataset, entries):
+def build_combined(dataset, entries):
 
-    label_value = 0 if display_dataset in REAL_DATASETS else 1
+    # Dataset-level ground truth, from the one rule the whole project labels
+    # with (ffhq -> real, anything else -> fake). The CSVs carry no label
+    # column — run.py deliberately doesn't write one.
+    label_value = label_for_dataset(dataset)
 
     frames = []
     resize_settings = set()
@@ -161,10 +133,6 @@ def build_combined(display_dataset, entries):
         delta = df["Predicted label"].astype(int)   # already thresholded by run.py — trust it, don't re-derive
         label = label_value                          # dataset-level, not per-row: this dataset is all-real or all-fake
 
-        # Grag outputs are inverted
-        #        if stem.startswith("grag2021"):
-        #            score = 1 - score
-
         sub = pd.DataFrame(index=df.index)
 
         sub[f"score_{stem}"] = score
@@ -184,7 +152,7 @@ def build_combined(display_dataset, entries):
 
     if len(resize_settings) > 1:
         print(
-            f"WARNING: models being combined for {display_dataset} used different --resize "
+            f"WARNING: models being combined for {dataset} used different --resize "
             f"settings ({sorted(resize_settings)}) — this is comparing apples to oranges "
             f"unless that's intentional."
         )
@@ -378,7 +346,13 @@ def oracle_accuracy(combined):
 
 def main():
 
-    datasets = discover_datasets()
+    datasets = discover_entries()
+    if not datasets:
+        raise SystemExit(
+            f"no prediction CSVs found in {RESULTS_DIR}. Run run.py first. (Datasets are "
+            f"discovered from the directory names under data/, so that directory must be "
+            f"present even when only the finished CSVs are being analysed.)"
+        )
 
     OUTPUT_DIR.mkdir(exist_ok=True)
 
@@ -390,10 +364,18 @@ def main():
         print(dataset)
         print("=" * 80)
 
+        # A dataset with nothing to correlate is skipped, not fatal: aeroblade's
+        # CSV is always unusable here (its schema carries a raw reconstruction
+        # distance and no "Predicted label"), so a results/ dir holding only
+        # that for one dataset must not abort the datasets that follow.
+        try:
+            combined = build_combined(dataset, entries)
+        except ValueError as e:
+            print(f"[skip] {dataset}: {e}\n")
+            continue
+
         outdir = OUTPUT_DIR / dataset
         outdir.mkdir(parents=True, exist_ok=True)
-
-        combined = build_combined(dataset, entries)
 
         print(f"{combined.shape[0]} images")
         print(f"{len(entries)} models")
