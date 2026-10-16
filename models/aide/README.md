@@ -1,19 +1,6 @@
 # models/aide/
 
-Wrapper around [`shilinyan99/AIDE`](https://github.com/shilinyan99/AIDE), ported from the uploaded
-`aidecolab.pdf` Colab workflow.
-
-This implementation follows the repository contract:
-
-- `load(**kwargs)` loads the model/checkpoint and prepares inference.
-- `predict(image_path) -> score` returns a fake-probability score in `[0, 1]`.
-- `result_stem()` names the output file after the checkpoint's generation family (below).
-
-The shared top-level `run.py` writes the standard schema documented in
-[`results/README.md`](../../results/README.md) — `filepath`, `score`, `Predicted label`, `resize`.
-There is **no `label` column**: ground truth is recoverable from the dataset name (contains `ffhq`
-→ real, else fake) and is used only for the console accuracy line. `--force-label 0|1` overrides
-that rule for a run whose folder name doesn't follow it.
+Wrapper around [`shilinyan99/AIDE`](https://github.com/shilinyan99/AIDE).
 
 ## Setup
 
@@ -21,12 +8,14 @@ that rule for a run whose folder name doesn't follow it.
 cd models/aide && bash setup.sh
 ```
 
-`setup.sh` clones upstream to `AIDE/`, builds `venv/` with an overridable interpreter
-(`PYTHON=python3.12 ./setup.sh` on a cluster), installs `requirements.txt` plus torch/torchvision,
-and pulls the pretrained checkpoints from the AIDE authors' Google Drive folder into
-`AIDE/checkpoints/` with `gdown`. Skip that last step with
-`SKIP_CHECKPOINT_DOWNLOAD=1 ./setup.sh`; if Drive rate-limits the download, the script prints the
-`gdown --folder ...` command to re-run by hand.
+Clones upstream to `AIDE/`, builds `venv/`, installs `requirements.txt` plus
+`torch`/`torchvision`, and pulls the pretrained checkpoints from the AIDE authors' Google Drive
+folder into `AIDE/checkpoints/` with `gdown`. Pass `PYTHON=` to select an interpreter on a cluster
+(`PYTHON=python3.12 bash setup.sh`).
+
+`SKIP_CHECKPOINT_DOWNLOAD=1` skips the download. If Drive rate-limits it — which is a Google
+limit, not a problem with this repo — the script prints the `gdown --folder ...` command to re-run
+by hand.
 
 ## Checkpoints
 
@@ -40,39 +29,36 @@ AIDE ships three detector checkpoints, trained on different fake-image sources. 
 | `sd14` | `sd14_train.pth` | Stable Diffusion 1.4 | `aide_DM` |
 
 `genimage` keeps its own literal label rather than being forced into `GAN`/`DM`, because a mixed
-generator set is neither. The differing stems also keep the three checkpoints' runs in separate
-CSVs; all three are listed in `VARIANT_ARGS` in the top-level `run.py`, so a sweep (`--all` /
+generator set is neither. The differing stems keep the three checkpoints' runs in separate CSVs;
+all three are listed in `VARIANT_ARGS` in the top-level `run.py`, so a sweep (`--all` /
 `--models aide`) runs each of them.
 
-To use a checkpoint from elsewhere, give a full path — it overrides `checkpoint=` entirely:
+A checkpoint from elsewhere can be given as a full path, which overrides `checkpoint=` entirely:
 
 ```bash
-models/aide/venv/bin/python run.py --model aide --dataset flux_faces \
+models/aide/venv/bin/python run.py --model aide --dataset flux_test \
   --model-arg checkpoint_path=/absolute/path/to/your_checkpoint.pth
 ```
 
 `AIDE_WEIGHTS_PATH=/absolute/path/to/checkpoint.pth` in the environment does the same thing.
 
-## Model convention
+## Score convention
 
-AIDE outputs two logits:
+AIDE outputs two logits — class 0 real-like, class 1 fake-like. This wrapper returns
+`softmax([logit_real, logit_fake])[1]`, so a higher `score` means more fake-like, in `[0, 1]` as
+[`results/README.md`](../../results/README.md) specifies.
 
-```text
-class 0 = real-like
-class 1 = fake / AI-generated-like
+## Running
+
+```bash
+models/aide/venv/bin/python run.py --model aide --dataset flux_test --limit 10   # smoke test
+models/aide/venv/bin/python run.py --model aide --dataset flux_test
 ```
 
-This wrapper returns:
+With the default `genimage` checkpoint that writes
+`results/flux_test_aide_genimage_predictions.csv`.
 
-```python
-score = softmax([logit_real, logit_fake])[1]
-```
-
-so higher `score` means "more fake-like."
-
-## Usage
-
-Quick single-image test:
+Single image, in Python:
 
 ```python
 from model import AIDEModel
@@ -80,46 +66,11 @@ from model import AIDEModel
 model = AIDEModel()
 model.load()
 score = model.predict("/path/to/image.png")
-print(score)
 ```
 
-Full dataset run:
+## Preprocessing cost
 
-```bash
-models/aide/venv/bin/python run.py --model aide --dataset flux_faces
-```
-
-Quick smoke test:
-
-```bash
-models/aide/venv/bin/python run.py --model aide --dataset flux_faces --limit 10
-```
-
-With the default `genimage` checkpoint that writes:
-
-```text
-results/flux_faces_aide_genimage_predictions.csv
-```
-
-with these columns:
-
-```text
-filepath,score,Predicted label,resize
-```
-
-No per-run timing CSV is written — the run's duration is appended to `results/run_log.csv`
-instead. See [`results/README.md`](../../results/README.md) for why.
-
-## Notes
-
-AIDE preprocessing is heavier than many other detectors because each image is converted into five
-input tensors:
-
-1. DCT/noise low-rank patch
-2. DCT/noise high-rank patch
-3. second low-rank patch
-4. second high-rank patch
-5. resized/normalized image tensor
-
-This matches the uploaded Colab workflow and is why AIDE may run slower than simpler resize-only
-models.
+AIDE's preprocessing is heavier than most detectors here: each image is converted into **five**
+input tensors — a DCT/noise low-rank patch, a DCT/noise high-rank patch, a second low-rank patch,
+a second high-rank patch, and a resized/normalized image tensor. Expect it to be slower than the
+resize-only detectors; see [`ResizingRemarks.md`](../../ResizingRemarks.md).

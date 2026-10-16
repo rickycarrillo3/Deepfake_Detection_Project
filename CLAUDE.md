@@ -51,9 +51,11 @@ Data flows: `data/` (raw image shards) → `loaders/` (yield `(image_path, label
   them (see below and `models/README.md`); they are for scores that are genuinely not
   fake-probabilities, not a general escape hatch.
 
-- **`data/<dataset_name>/shard_01../`** — git-ignored image shards, 1000 PNGs each, uploaded
-  incrementally. The shard count varies by dataset (FFHQ has 20, ~20,000 images), and a dataset
-  folder may have only some shards present at any time, so nothing may hardcode a count —
+- **`data/<dataset_name>/shard_01../`** — git-ignored image shards, 1000 images each, uploaded
+  incrementally. Files are selected by extension (`loaders.dataset.IMAGE_EXTENSIONS`: PNG and
+  JPEG — TrueFake's social-network-shared subsets are JPEG, so a PNG-only filter would silently
+  yield nothing for them). The shard count varies by dataset (FFHQ has 20, ~20,000 images), and a
+  dataset folder may have only some shards present at any time, so nothing may hardcode a count —
   `loaders/` discovers them by the `shard_` prefix. Ground-truth label is derived
   from the folder name: contains `ffhq` (case-insensitive) → label `0` (real); anything else →
   label `1` (fake).
@@ -180,8 +182,8 @@ Data flows: `data/` (raw image shards) → `loaders/` (yield `(image_path, label
   a timer wrapped around the scoring loop silently bills the runner's bookkeeping to the model —
   that wider span is `wall_seconds`, which the run log already records separately.
 
-  Results contents are **git-ignored** (only `.gitkeep` + `README.md` are tracked) — everything
-  produced so far has been throwaway test output. Revisit this once real benchmark runs land.
+  Results contents are **git-ignored** (only `.gitkeep` + `README.md` are tracked): the CSVs are
+  reproducible from the code and the dataset, so there is nothing to gain from versioning them.
   `run_log.csv` is ignored with them: it records what one machine has run, and an append-only file
   committed from several machines would conflict constantly.
 

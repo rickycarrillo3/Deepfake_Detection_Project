@@ -12,7 +12,7 @@ duplicating it.
 ```
 DMimageDetection/
 ├── dmimagedetection/          # vendored clone (shared)
-├── venv/      # shared venv
+├── venv/                      # shared venv
 ├── weights/
 │   ├── Grag2021_progan/model_epoch_best.pth
 │   └── Grag2021_latent/model_epoch_best.pth
@@ -74,9 +74,8 @@ cd models/DMimageDetection/DMimageDetection_GAN
 
 ## Why not merge the two into one model.py?
 
-They're kept as separate `model.py` files, registered as two distinct
-models in the top-level `run.py` (rather than one model with a variant flag), because they're independent trained
-detectors for your correlation/ensembling analysis — you want
-`results/` entries for `DMimageDetection_GAN` and `DMimageDetection_DM` as genuinely
-separate signals, matching how `main.py` itself treats them as two
-entries in its `models_list`.
+They are kept as separate `model.py` files, registered as two distinct models in the top-level
+`run.py` rather than as one model with a variant flag, because they are independently trained
+detectors: the correlation analysis needs `DMimageDetection_GAN` and `DMimageDetection_DM` as
+genuinely separate signals. Upstream's own `main.py` treats them the same way, as two entries in
+its `models_list`.

@@ -6,7 +6,7 @@ Images Using Autoencoder Reconstruction Error") behind this repo's
 `load()` / `predict(image_path)` contract, so the shared top-level
 `run.py` drives it like every other model.
 
-Ported from `scripts/run_aeroblade.py`, which calls
+It corresponds to upstream's `scripts/run_aeroblade.py`, which calls
 `aeroblade.high_level_funcs.compute_distances()`.
 
 ## How AEROBLADE differs from the other models here
@@ -41,7 +41,7 @@ Ported from `scripts/run_aeroblade.py`, which calls
 
 `model.py` declares four schema hooks (`SCORE_COLUMN`, `SCORE_PRECISION`,
 `PREDICTED_LABEL`, `SUPPORTS_RESIZE`) plus `extra_columns()`; see
-`models/README.md` for what `run.py` does with them.
+[`CONTRIBUTING.md`](../../CONTRIBUTING.md) for what `run.py` does with them.
 
 ## Setup
 

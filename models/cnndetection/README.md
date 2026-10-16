@@ -10,7 +10,7 @@ outputs a single logit that `sigmoid()` turns into a per-image fake-probability.
 cnndetection/
 ├── CNNDetection/          # vendored clone (networks/, demo.py, weights/)
 │   └── weights/blur_jpg_prob0.5.pth
-├── venv/      # isolated venv
+├── venv/                  # isolated venv
 ├── setup.sh               # clones the repo, builds the venv, downloads weights
 ├── requirements.txt
 ├── model.py               # load()/predict() contract
