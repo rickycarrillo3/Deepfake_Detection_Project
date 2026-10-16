@@ -615,32 +615,7 @@ def run_all(
     for model_name in selected:
         model_dir = os.path.join(REPO_ROOT, MODELS[model_name])
         python_bin = _find_model_python(model_name, model_dir)
-        
-        if not keep_repo:
-            clone_dirs = _find_git_clone_roots(model_dir)
-            if not clone_dirs:
-                print(f"[cleanup] {model_name}: no cloned git repo found under {model_dir} — nothing to remove.")
-            for clone_dir in clone_dirs:
-                if dry_run:
-                    print(f"[dry-run] would remove cloned repo: {clone_dir}")
-                    continue
-                print(
-                    f"[cleanup] {model_name}: removing cloned repo {clone_dir} "
-                    f"(re-run its setup.sh to restore it before using this model again)"
-                )
-                _safe_rmtree(clone_dir, model_name)
 
-        if not keep_venv and model_name not in VENV_OVERRIDE:
-            # VENV_OVERRIDE models' venvs are shared — handled once at the end
-            # below, not per-model, for the same reason as SHARED_CLONE_ROOTS.
-            venv_dir = os.path.join(model_dir, "venv")
-            if os.path.isdir(venv_dir):
-                if dry_run:
-                    print(f"[dry-run] would remove venv: {venv_dir}")
-                else:
-                    print(f"[cleanup] {model_name}: removing venv {venv_dir} (re-run its setup.sh to rebuild it)")
-                    _safe_rmtree(venv_dir, model_name)
-                    
         needs_setup = python_bin is None or not _repo_present(model_name, model_dir)
 
         if needs_setup:
