@@ -9,6 +9,12 @@ Images Using Autoencoder Reconstruction Error") behind this repo's
 It corresponds to upstream's `scripts/run_aeroblade.py`, which calls
 `aeroblade.high_level_funcs.compute_distances()`.
 
+> **Not part of the reported benchmark.** This adapter is complete and
+> runnable, but AEROBLADE was not run for the paper — the fourteen
+> benchmarked detectors are the other eight under `models/` plus the six
+> under `baselines/`. Everything below describes how to run it if you
+> want to.
+
 ## How AEROBLADE differs from the other models here
 
 - **Training-free.** No classifier weights — it reconstructs each image

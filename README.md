@@ -6,11 +6,16 @@ Code and benchmarking harness for:
 > [TODO: AUTHOR LIST]
 > [TODO: VENUE, YEAR] · [TODO: arXiv / DOI link]
 
-This repository benchmarks **fifteen pretrained deepfake detectors** against the
+This repository benchmarks **fourteen pretrained deepfake detectors** against the
 [TrueFake](https://arxiv.org/abs/2504.20658) dataset under a single, uniform evaluation harness,
 and emits per-image scores as CSVs. The scores are then analysed for **failure correlation**
 between detectors — the question being which detectors fail on *different* images, and are
 therefore worth combining into an ensemble or mixture of experts.
+
+A fifteenth detector, AEROBLADE, is implemented and driven by the same runner but **was not
+included in the reported benchmark**. It is kept here because it is training-free and returns a
+reconstruction distance rather than a fake-probability, which makes it a useful reference point;
+see [`models/aeroblade/`](models/aeroblade/README.md).
 
 The harness exists because per-detector evaluation code is not comparable across detectors: each
 upstream repository preprocesses images differently, thresholds differently, and times itself
@@ -20,7 +25,8 @@ be placed side by side.
 
 ## Detectors under test
 
-Nine detectors use their **original authors' checkpoints** ([`models/`](models/README.md)):
+Eight of the benchmarked detectors use their **original authors' checkpoints**
+([`models/`](models/README.md)), alongside the unbenchmarked AEROBLADE:
 
 | registry name | detector | source |
 |---|---|---|
@@ -32,7 +38,7 @@ Nine detectors use their **original authors' checkpoints** ([`models/`](models/R
 | `rine` | RINE (intermediate CLIP encoder blocks) | [mever-team/rine](https://github.com/mever-team/rine) |
 | `aide` | AIDE | [shilinyan99/AIDE](https://github.com/shilinyan99/AIDE) |
 | `co-spy` | Co-Spy (semantic + artifact fusion) | [Megum1/CO-SPY](https://github.com/Megum1/CO-SPY) |
-| `aeroblade` | AEROBLADE (training-free reconstruction error) | CVPR 2024 — [jonasricker/aeroblade](https://github.com/jonasricker/aeroblade) |
+| `aeroblade` *(not benchmarked)* | AEROBLADE (training-free reconstruction error) | CVPR 2024 — [jonasricker/aeroblade](https://github.com/jonasricker/aeroblade) |
 
 Six are the **TrueFake paper's own baselines** ([`baselines/`](baselines/README.md)), using
 checkpoints supplied by that paper's authors and prefixed `tf-`:
@@ -53,9 +59,9 @@ with the same architectures under `models/`. `baselines/R50_nodown` and
 `models/DMimageDetection/` are the same network with different weights.
 
 Three detectors ship more than one meaningfully different checkpoint, which the runner expands
-automatically, so a full sweep is **21 runs across the 15 registry entries**: `co-spy`
-(ProGAN / SD-v1.4), `aide` (GenImage / ProGAN / SD-1.4) and `rine` (LDM, and 1-, 2-, 4-class
-ProGAN).
+automatically: `co-spy` (ProGAN / SD-v1.4), `aide` (GenImage / ProGAN / SD-1.4) and `rine` (LDM,
+and 1-, 2-, 4-class ProGAN). The fourteen benchmarked detectors therefore produce **20 scored
+runs**, and `--all`, which also covers AEROBLADE, produces 21 across all 15 registry entries.
 
 ## Requirements
 
@@ -135,7 +141,7 @@ plain interpreter that has `pandas` + `tqdm`:
 
 ```bash
 python3 run.py --list                                        # the registry
-python3 run.py --all        --dataset ffhq_test              # all 15 (21 runs)
+python3 run.py --all        --dataset ffhq_test              # all 15, AEROBLADE included (21 runs)
 python3 run.py --baselines  --dataset ffhq_test              # the six tf-* only
 python3 run.py --models tf-npr,freqnet --dataset ffhq_test   # a named subset
 ```

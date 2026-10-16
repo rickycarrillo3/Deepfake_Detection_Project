@@ -1,6 +1,7 @@
 # models/
 
-The nine detectors evaluated with their **original authors' checkpoints**, one subdirectory each.
+Nine detectors using their **original authors' checkpoints**, one subdirectory each. Eight of them
+are part of the reported benchmark; **AEROBLADE is implemented here but was not run for it**.
 
 The six detectors retrained by the TrueFake paper's authors live in
 [`baselines/`](../baselines/README.md) instead, `tf-` prefixed — same contract, different
@@ -18,7 +19,7 @@ provenance, and deliberately not interchangeable with these.
 | `rine` | `rine/` | RINE — intermediate CLIP encoder blocks | [mever-team/rine](https://github.com/mever-team/rine) |
 | `aide` | `aide/` | AIDE | [shilinyan99/AIDE](https://github.com/shilinyan99/AIDE) |
 | `co-spy` | `co-spy/` | Co-Spy — semantic + artifact fusion | [Megum1/CO-SPY](https://github.com/Megum1/CO-SPY) |
-| `aeroblade` | `aeroblade/` | AEROBLADE — training-free reconstruction error | CVPR 2024 — [jonasricker/aeroblade](https://github.com/jonasricker/aeroblade) |
+| `aeroblade` *(not benchmarked)* | `aeroblade/` | AEROBLADE — training-free reconstruction error | CVPR 2024 — [jonasricker/aeroblade](https://github.com/jonasricker/aeroblade) |
 
 > `grag2021` and `DMimageDetection` are easy to conflate: same lab and overlapping co-authors, but
 > different repositories, different papers and different weights. The upstream checkpoint keys
@@ -67,8 +68,8 @@ the manual `gdown` command to retry with. And **set `HF_HOME` to scratch space b
 ## Variants
 
 Three detectors ship more than one meaningfully different checkpoint. A sweep (`--all`,
-`--baselines`, `--models`) expands these automatically, so the full sweep is 21 runs rather than
-15:
+`--baselines`, `--models`) expands these automatically, so `--all` is 21 runs rather than 15 —
+20 of them across the fourteen benchmarked detectors, plus AEROBLADE:
 
 | detector | variants | selected with |
 |---|---|---|
